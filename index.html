@@ -25,7 +25,7 @@
       </div>
 
       <div class="top-actions">
-        <button class="button button-primary" data-open-folder type="button">Choose dataset folder</button>
+        <button class="button button-primary" data-open-folder type="button">Select dataset folder</button>
         <input id="folderInput" class="visually-hidden" type="file" webkitdirectory directory multiple>
         <input id="fileInput" class="visually-hidden" type="file" accept="image/*" multiple>
         <button id="importButton" class="button" type="button">Import JSON</button>
@@ -114,10 +114,14 @@
         <canvas id="annotationCanvas" aria-label="Image annotation canvas"></canvas>
         <div id="emptyState" class="empty-state">
           <span class="empty-kicker">Start here</span>
-          <h2>Choose a folder of coral images</h2>
+          <h2>Load a folder of coral images</h2>
           <p>Images stay on this computer. Paint only areas you can classify confidently; boundaries can remain blank.</p>
-          <button class="button button-primary button-large" data-open-folder type="button">Choose dataset folder</button>
-          <p class="folder-picker-hint">In the folder window, select the dataset folder itself.</p>
+          <div id="folderDropZone" class="folder-drop-zone">
+            <strong>Drag the dataset folder here</strong>
+            <span>or</span>
+            <button class="button button-primary button-large" data-open-folder type="button">Select dataset folder</button>
+            <p class="folder-picker-hint">Chrome labels this permission <strong>Upload</strong>, but this app processes the files locally and sends nothing.</p>
+          </div>
           <div class="empty-alternatives">
             <label class="text-button" for="fileInput">Choose individual image files instead</label>
             <span aria-hidden="true">or</span>

@@ -12,8 +12,10 @@ uploaded to GitHub or any other server.
 
 1. Open the app in a current desktop browser.
 2. Enter your name under **Annotator**.
-3. Choose **Choose dataset folder**. If folder selection is unavailable, choose
-   **Choose individual image files** instead.
+3. Drag the dataset folder onto the start panel, or choose **Select dataset
+   folder**. Chrome may label the folder permission **Upload** even though the
+   app reads the files locally and does not send them over the network. If
+   folder selection is unavailable, choose **Choose individual image files**.
 4. Paint short, confident strokes inside rubble or sediment regions. Leave
    boundaries and unrelated classes unpainted.
 5. Mark each completed image as reviewed.

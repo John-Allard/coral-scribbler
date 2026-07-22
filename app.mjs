@@ -11,7 +11,11 @@ import {
   storageKeyForDataset,
   summarizeSession,
 } from "./model.mjs";
-import { describeFileSelection, isSupportedImageFile } from "./file-selection.mjs";
+import {
+  describeDroppedSelection,
+  describeFileSelection,
+  isSupportedImageFile,
+} from "./file-selection.mjs";
 
 const $ = (id) => document.getElementById(id);
 
@@ -19,6 +23,7 @@ const elements = {
   canvas: $("annotationCanvas"),
   stage: $("canvasStage"),
   emptyState: $("emptyState"),
+  folderDropZone: $("folderDropZone"),
   loadingState: $("loadingState"),
   datasetName: $("datasetName"),
   progressText: $("progressText"),
@@ -461,6 +466,24 @@ async function loadFolderFiles(fileList) {
   if (result) {
     const restoredText = result.restored ? " Browser autosave restored." : "";
     showToast(`Loaded ${result.count} image${result.count === 1 ? "" : "s"}.${restoredText}`, 5000);
+  }
+}
+
+async function loadDroppedFiles(dataTransfer) {
+  try {
+    const { datasetName, fileEntries } = await describeDroppedSelection(dataTransfer);
+    if (fileEntries.length === 0) {
+      showToast("That drop does not contain any files.");
+      return;
+    }
+    const result = await loadSelectedFileEntries(fileEntries, datasetName);
+    if (result) {
+      const restoredText = result.restored ? " Browser autosave restored." : "";
+      showToast(`Loaded ${result.count} image${result.count === 1 ? "" : "s"}.${restoredText}`, 5000);
+    }
+  } catch (error) {
+    console.error(error);
+    showToast("That folder could not be read. Use Select dataset folder instead.", 6000);
   }
 }
 
@@ -1093,6 +1116,28 @@ function wireEvents() {
   });
   document.querySelectorAll("[data-open-folder]").forEach((button) => {
     button.addEventListener("click", openImageFolder);
+  });
+  let folderDragDepth = 0;
+  elements.folderDropZone.addEventListener("dragenter", (event) => {
+    event.preventDefault();
+    folderDragDepth += 1;
+    elements.folderDropZone.classList.add("is-dragging");
+  });
+  elements.folderDropZone.addEventListener("dragover", (event) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  });
+  elements.folderDropZone.addEventListener("dragleave", () => {
+    folderDragDepth = Math.max(0, folderDragDepth - 1);
+    if (folderDragDepth === 0) {
+      elements.folderDropZone.classList.remove("is-dragging");
+    }
+  });
+  elements.folderDropZone.addEventListener("drop", async (event) => {
+    event.preventDefault();
+    folderDragDepth = 0;
+    elements.folderDropZone.classList.remove("is-dragging");
+    await loadDroppedFiles(event.dataTransfer);
   });
   elements.brushSize.addEventListener("input", () => setBrushDiameter(elements.brushSize.value));
   elements.folderInput.addEventListener("change", async () => {
