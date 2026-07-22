@@ -28,9 +28,8 @@
         <button class="button button-primary" data-open-folder type="button">Select dataset folder</button>
         <input id="folderInput" class="visually-hidden" type="file" webkitdirectory directory multiple>
         <input id="fileInput" class="visually-hidden" type="file" accept="image/*" multiple>
-        <button id="importButton" class="button" type="button">Import JSON</button>
-        <input id="importInput" class="visually-hidden" type="file" accept="application/json,.json">
-        <button id="exportJsonButton" class="button" type="button" disabled>Export JSON</button>
+        <button id="importButton" class="button" type="button" disabled>Import CSV</button>
+        <input id="importInput" class="visually-hidden" type="file" accept="text/csv,.csv">
         <button id="exportCsvButton" class="button" type="button" disabled>Export CSV</button>
         <button id="helpButton" class="icon-button" type="button" aria-label="Show keyboard shortcuts">?</button>
       </div>
@@ -127,7 +126,7 @@
             <span aria-hidden="true">or</span>
             <button id="demoButton" class="text-button" type="button">try a demo image</button>
           </div>
-          <small class="privacy-note">No images or annotations are uploaded. Export JSON before changing browsers or computers.</small>
+          <small class="privacy-note">No images or annotations are uploaded. Export CSV before changing browsers or computers.</small>
         </div>
         <div id="loadingState" class="loading-state" hidden>
           <span class="loader"></span>

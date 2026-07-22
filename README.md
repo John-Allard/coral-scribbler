@@ -19,15 +19,15 @@ uploaded to GitHub or any other server.
 4. Paint short, confident strokes inside rubble or sediment regions. Leave
    boundaries and unrelated classes unpainted.
 5. Mark each completed image as reviewed.
-6. Select **Export JSON** before closing or changing computers, then send that
-   JSON file to the project team. CSV export is provided for inspection.
+6. Select **Export CSV** before closing or changing computers, then send that
+   CSV file to the project team.
 
 The browser keeps a convenience autosave for the selected dataset, but that
-backup belongs to one browser profile on one device. Exported JSON is the
+backup belongs to one browser profile on one device. Exported CSV is the
 durable research record.
 
 To continue an exported session, select the same folder or files and then use
-**Import JSON**.
+**Import CSV**.
 
 ## Labels
 

@@ -7,6 +7,7 @@ import {
   naturalCompare,
   normalizeSession,
   randomId,
+  sessionFromCsv,
   sessionToCsv,
   storageKeyForDataset,
   summarizeSession,
@@ -31,7 +32,6 @@ const elements = {
   fileInput: $("fileInput"),
   importButton: $("importButton"),
   importInput: $("importInput"),
-  exportJsonButton: $("exportJsonButton"),
   exportCsvButton: $("exportCsvButton"),
   helpButton: $("helpButton"),
   helpDialog: $("helpDialog"),
@@ -241,7 +241,7 @@ async function persistSession(generation) {
   } catch (error) {
     console.error(error);
     setSaveStatus("error", "Project save failed; browser backup kept");
-    showToast("The project draft could not be written. Export JSON before closing.", 6000);
+    showToast("The project draft could not be written. Export CSV before closing.", 6000);
   }
 }
 
@@ -264,7 +264,7 @@ function setBrushDiameter(value) {
 
 function setControlsEnabled(enabled) {
   [
-    elements.exportJsonButton,
+    elements.importButton,
     elements.exportCsvButton,
     elements.imageSearch,
     elements.fitButton,
@@ -1022,26 +1022,17 @@ function exportBaseName() {
   return `${safeName}_${date}`;
 }
 
-function exportJson() {
-  const document = documentForExport(state.session);
-  downloadBlob(
-    new Blob([`${JSON.stringify(document, null, 2)}\n`], { type: "application/json" }),
-    `${exportBaseName()}.json`,
-  );
-  showToast("JSON annotation backup exported.");
-}
-
 function exportCsv() {
   downloadBlob(
     new Blob([sessionToCsv(state.session)], { type: "text/csv;charset=utf-8" }),
     `${exportBaseName()}.csv`,
   );
-  showToast("CSV point and stroke table exported.");
+  showToast("CSV annotation file exported.");
 }
 
-async function importJsonFile(file) {
+async function importCsvFile(file) {
   try {
-    const imported = normalizeSession(JSON.parse(await file.text()));
+    const imported = sessionFromCsv(await file.text());
     state.session = imported;
     for (const descriptor of state.descriptors) {
       ensureImage(state.session, descriptor);
@@ -1052,8 +1043,8 @@ async function importJsonFile(file) {
     render();
     showToast(
       state.descriptors.length
-        ? "Imported annotations. Paths matching the loaded images are now visible."
-        : "Imported annotations. Open the matching image folder to continue.",
+        ? "Imported CSV annotations. Paths matching the loaded images are now visible."
+        : "Imported CSV annotations. Open the matching image folder to continue.",
       5000,
     );
   } catch (error) {
@@ -1152,11 +1143,10 @@ function wireEvents() {
   elements.importInput.addEventListener("change", async () => {
     const [file] = elements.importInput.files;
     if (file) {
-      await importJsonFile(file);
+      await importCsvFile(file);
     }
     elements.importInput.value = "";
   });
-  elements.exportJsonButton.addEventListener("click", exportJson);
   elements.exportCsvButton.addEventListener("click", exportCsv);
   elements.helpButton.addEventListener("click", () => elements.helpDialog.showModal());
   elements.demoButton.addEventListener("click", loadDemo);

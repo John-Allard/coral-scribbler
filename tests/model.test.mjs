@@ -7,6 +7,7 @@ import {
   documentForExport,
   ensureImage,
   normalizeSession,
+  sessionFromCsv,
   sessionToCsv,
   storageKeyForDataset,
   summarizeSession,
@@ -44,7 +45,7 @@ test("session round-trip preserves sparse strokes and review state", () => {
 });
 
 
-test("CSV includes image metadata rows and point rows", () => {
+test("CSV round-trip preserves metadata and exact stroke geometry", () => {
   const session = createSession("Gulf, pilot");
   session.annotator = "=unsafe spreadsheet text";
   const image = ensureImage(session, {
@@ -53,22 +54,34 @@ test("CSV includes image metadata rows and point rows", () => {
     width: 100,
     height: 80,
   });
+  image.review_status = "reviewed";
+  image.reviewed_at_utc = "2026-07-21T20:00:00.000Z";
+  image.notes = "Quoted \"note\", with a newline\nand =formula text";
   image.strokes.push({
     id: "stroke_1",
     class_id: "sediment",
     brush_diameter_px: 12,
     created_at_utc: "2026-07-21T19:00:00.000Z",
-    points: [[4, 5, 0], [7, 9, 11]],
+    points: [[4.123456, 5.654321, 0], [7, 9, 11]],
   });
 
   const csv = sessionToCsv(session);
-  const lines = csv.trim().split("\n");
-  assert.equal(lines.length, 4);
-  assert.match(lines[1], /^"image",/);
-  assert.match(lines[2], /^"point",/);
-  assert.match(lines[2], /"sediment","2","12"/);
   assert.match(csv, /"'=unsafe spreadsheet text"/);
   assert.match(csv, /"frame,001.png"/);
+  const restored = sessionFromCsv(csv);
+  const restoredImage = restored.images["frame,001.png"];
+  assert.equal(restored.annotator, "=unsafe spreadsheet text");
+  assert.equal(restoredImage.notes, image.notes);
+  assert.equal(restoredImage.review_status, "reviewed");
+  assert.equal(restoredImage.strokes[0].class_id, "sediment");
+  assert.deepEqual(restoredImage.strokes[0].points, image.strokes[0].points);
+});
+
+
+test("CSV import rejects missing canonical columns", () => {
+  assert.throws(() => sessionFromCsv('"record_type","schema_version"\n"image","coral-scribbles/v1"\n'), {
+    message: /missing required columns/,
+  });
 });
 
 

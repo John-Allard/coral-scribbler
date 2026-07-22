@@ -105,7 +105,7 @@ function cleanImageRecord(record, fallbackPath = "") {
 
 export function normalizeSession(rawDocument) {
   if (!rawDocument || typeof rawDocument !== "object") {
-    throw new Error("Annotation file is not a JSON object.");
+    throw new Error("Annotation data is not an object.");
   }
   if (rawDocument.schema_version !== SCHEMA_VERSION) {
     throw new Error(`Unsupported annotation schema: ${rawDocument.schema_version || "missing"}`);
@@ -219,6 +219,11 @@ function safeSpreadsheetText(value) {
   return /^[=+\-@]/.test(text) ? `'${text}` : text;
 }
 
+function restoreSpreadsheetText(value) {
+  const text = value == null ? "" : String(value);
+  return /^'[=+\-@]/.test(text) ? text.slice(1) : text;
+}
+
 function csvCell(value) {
   const text = safeSpreadsheetText(value).replaceAll('"', '""');
   return `"${text}"`;
@@ -232,6 +237,8 @@ export function sessionToCsv(session) {
     "session_id",
     "dataset_name",
     "annotator",
+    "session_created_at_utc",
+    "session_updated_at_utc",
     "image_relative_path",
     "image_name",
     "image_width",
@@ -261,6 +268,8 @@ export function sessionToCsv(session) {
     document.session_id,
     document.dataset_name,
     document.annotator,
+    document.created_at_utc,
+    document.updated_at_utc,
     record.relative_path,
     record.name,
     record.width,
@@ -290,14 +299,215 @@ export function sessionToCsv(session) {
           stroke.brush_diameter_px,
           stroke.created_at_utc,
           pointIndex,
-          Number(point[0].toFixed(3)),
-          Number(point[1].toFixed(3)),
-          Math.round(point[2] || 0),
+          point[0],
+          point[1],
+          point[2] || 0,
         ].map(csvCell).join(","));
       });
     }
   }
   return `${rows.join("\n")}\n`;
+}
+
+function parseCsvRows(csvText) {
+  const text = String(csvText || "").replace(/^\uFEFF/, "");
+  const rows = [];
+  let row = [];
+  let cell = "";
+  let inQuotes = false;
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+    if (inQuotes) {
+      if (character === '"') {
+        if (text[index + 1] === '"') {
+          cell += '"';
+          index += 1;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        cell += character;
+      }
+      continue;
+    }
+
+    if (character === '"' && cell.length === 0) {
+      inQuotes = true;
+    } else if (character === ",") {
+      row.push(cell);
+      cell = "";
+    } else if (character === "\n" || character === "\r") {
+      if (character === "\r" && text[index + 1] === "\n") {
+        index += 1;
+      }
+      row.push(cell);
+      rows.push(row);
+      row = [];
+      cell = "";
+    } else {
+      cell += character;
+    }
+  }
+
+  if (inQuotes) {
+    throw new Error("CSV contains an unterminated quoted field.");
+  }
+  if (cell.length > 0 || row.length > 0) {
+    row.push(cell);
+    rows.push(row);
+  }
+  return rows;
+}
+
+function csvNumber(value, label, fallback = null) {
+  if (value === "" && fallback !== null) {
+    return fallback;
+  }
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    throw new Error(`CSV has an invalid ${label}: ${value || "blank"}`);
+  }
+  return numeric;
+}
+
+export function sessionFromCsv(csvText) {
+  const rows = parseCsvRows(csvText);
+  if (rows.length < 2) {
+    throw new Error("CSV has no annotation records.");
+  }
+
+  const headers = rows[0];
+  const columns = new Map(headers.map((header, index) => [header, index]));
+  const required = [
+    "record_type",
+    "schema_version",
+    "session_id",
+    "dataset_name",
+    "annotator",
+    "image_relative_path",
+    "image_name",
+    "image_width",
+    "image_height",
+    "review_status",
+    "stroke_id",
+    "class_id",
+    "brush_diameter_px",
+    "stroke_created_at_utc",
+    "point_index",
+    "x",
+    "y",
+    "elapsed_ms",
+  ];
+  const missing = required.filter((header) => !columns.has(header));
+  if (missing.length > 0) {
+    throw new Error(`CSV is missing required columns: ${missing.join(", ")}`);
+  }
+
+  const valueAt = (row, name) => restoreSpreadsheetText(row[columns.get(name)] || "");
+  let session = null;
+  const strokeHolders = [];
+  const strokesByImage = new Map();
+
+  rows.slice(1).forEach((row, rowOffset) => {
+    if (row.every((value) => value === "")) {
+      return;
+    }
+    const rowNumber = rowOffset + 2;
+    const recordType = valueAt(row, "record_type");
+    if (!new Set(["image", "point"]).has(recordType)) {
+      throw new Error(`CSV row ${rowNumber} has unsupported record_type: ${recordType || "blank"}`);
+    }
+    const schemaVersion = valueAt(row, "schema_version");
+    if (schemaVersion !== SCHEMA_VERSION) {
+      throw new Error(`Unsupported annotation schema: ${schemaVersion || "missing"}`);
+    }
+
+    if (!session) {
+      session = createSession(valueAt(row, "dataset_name") || "Imported dataset");
+      session.session_id = valueAt(row, "session_id") || session.session_id;
+      session.annotator = valueAt(row, "annotator");
+      session.created_at_utc = valueAt(row, "session_created_at_utc") || session.created_at_utc;
+      session.updated_at_utc = valueAt(row, "session_updated_at_utc") || session.updated_at_utc;
+    }
+
+    const relativePath = valueAt(row, "image_relative_path");
+    if (!relativePath) {
+      throw new Error(`CSV row ${rowNumber} has no image_relative_path.`);
+    }
+    let record = session.images[relativePath];
+    if (!record) {
+      record = cleanImageRecord({
+        relative_path: relativePath,
+        name: valueAt(row, "image_name"),
+        width: csvNumber(valueAt(row, "image_width"), "image_width", 0),
+        height: csvNumber(valueAt(row, "image_height"), "image_height", 0),
+        file_size: csvNumber(valueAt(row, "file_size"), "file_size", 0),
+        last_modified: csvNumber(valueAt(row, "last_modified"), "last_modified", 0),
+        review_status: valueAt(row, "review_status"),
+        reviewed_at_utc: valueAt(row, "reviewed_at_utc") || null,
+        notes: valueAt(row, "image_notes"),
+        strokes: [],
+      }, relativePath);
+      session.images[relativePath] = record;
+    }
+
+    if (recordType === "image") {
+      return;
+    }
+
+    const strokeId = valueAt(row, "stroke_id");
+    const classId = valueAt(row, "class_id");
+    if (!strokeId || !CLASS_IDS.has(classId)) {
+      throw new Error(`CSV row ${rowNumber} has an invalid stroke_id or class_id.`);
+    }
+    let imageStrokes = strokesByImage.get(relativePath);
+    if (!imageStrokes) {
+      imageStrokes = new Map();
+      strokesByImage.set(relativePath, imageStrokes);
+    }
+    let holder = imageStrokes.get(strokeId);
+    if (!holder) {
+      holder = {
+        record,
+        id: strokeId,
+        class_id: classId,
+        brush_diameter_px: csvNumber(valueAt(row, "brush_diameter_px"), "brush_diameter_px"),
+        created_at_utc: valueAt(row, "stroke_created_at_utc"),
+        indexedPoints: [],
+      };
+      imageStrokes.set(strokeId, holder);
+      strokeHolders.push(holder);
+    } else if (holder.class_id !== classId) {
+      throw new Error(`CSV row ${rowNumber} changes the class of stroke ${strokeId}.`);
+    }
+    holder.indexedPoints.push({
+      index: csvNumber(valueAt(row, "point_index"), "point_index"),
+      point: [
+        csvNumber(valueAt(row, "x"), "x"),
+        csvNumber(valueAt(row, "y"), "y"),
+        csvNumber(valueAt(row, "elapsed_ms"), "elapsed_ms", 0),
+      ],
+    });
+  });
+
+  if (!session) {
+    throw new Error("CSV has no annotation records.");
+  }
+  for (const holder of strokeHolders) {
+    holder.indexedPoints.sort((left, right) => left.index - right.index);
+    const stroke = cleanStroke({
+      id: holder.id,
+      class_id: holder.class_id,
+      brush_diameter_px: holder.brush_diameter_px,
+      created_at_utc: holder.created_at_utc,
+      points: holder.indexedPoints.map(({ point }) => point),
+    });
+    if (stroke) {
+      holder.record.strokes.push(stroke);
+    }
+  }
+  return normalizeSession(session);
 }
 
 export function storageKeyForDataset(datasetName, descriptors) {
