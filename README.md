@@ -12,7 +12,7 @@ uploaded to GitHub or any other server.
 
 1. Open the app in a current desktop browser.
 2. Enter your name under **Annotator**.
-3. Choose **Open image folder**. If folder selection is unavailable, choose
+3. Choose **Choose dataset folder**. If folder selection is unavailable, choose
    **Choose individual image files** instead.
 4. Paint short, confident strokes inside rubble or sediment regions. Leave
    boundaries and unrelated classes unpainted.

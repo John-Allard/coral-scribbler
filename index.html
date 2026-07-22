@@ -15,7 +15,6 @@
         <span class="brand-mark" aria-hidden="true"></span>
         <div>
           <h1>Coral Scribbler</h1>
-          <p>Rubble and sediment, without the clutter.</p>
         </div>
       </div>
 
@@ -26,8 +25,8 @@
       </div>
 
       <div class="top-actions">
-        <label class="button button-primary" for="folderInput">Open image folder</label>
-        <input id="folderInput" class="visually-hidden" type="file" accept="image/*" webkitdirectory multiple>
+        <button class="button button-primary" data-open-folder type="button">Choose dataset folder</button>
+        <input id="folderInput" class="visually-hidden" type="file" webkitdirectory directory multiple>
         <input id="fileInput" class="visually-hidden" type="file" accept="image/*" multiple>
         <button id="importButton" class="button" type="button">Import JSON</button>
         <input id="importInput" class="visually-hidden" type="file" accept="application/json,.json">
@@ -117,9 +116,10 @@
           <span class="empty-kicker">Start here</span>
           <h2>Choose a folder of coral images</h2>
           <p>Images stay on this computer. Paint only areas you can classify confidently; boundaries can remain blank.</p>
-          <label class="button button-primary button-large" for="folderInput">Open image folder</label>
+          <button class="button button-primary button-large" data-open-folder type="button">Choose dataset folder</button>
+          <p class="folder-picker-hint">In the folder window, select the dataset folder itself.</p>
           <div class="empty-alternatives">
-            <label class="text-button" for="fileInput">Choose individual image files</label>
+            <label class="text-button" for="fileInput">Choose individual image files instead</label>
             <span aria-hidden="true">or</span>
             <button id="demoButton" class="text-button" type="button">try a demo image</button>
           </div>

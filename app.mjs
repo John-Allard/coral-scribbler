@@ -11,6 +11,7 @@ import {
   storageKeyForDataset,
   summarizeSession,
 } from "./model.mjs";
+import { isSupportedImageFile, readDirectoryFiles } from "./file-selection.mjs";
 
 const $ = (id) => document.getElementById(id);
 
@@ -59,7 +60,6 @@ const elements = {
 };
 
 const classById = Object.fromEntries(CLASS_DEFINITIONS.map((item) => [item.id, item]));
-const imageExtensions = /\.(png|jpe?g|tif?f|bmp|webp)$/i;
 const ctx = elements.canvas.getContext("2d", { alpha: false });
 
 const state = {
@@ -415,24 +415,17 @@ async function setDataset(descriptors, datasetName, session, options = {}) {
   }
 }
 
-async function loadFolderFiles(fileList) {
-  const files = Array.from(fileList).filter((file) => file.type.startsWith("image/") || imageExtensions.test(file.name));
-  if (files.length === 0) {
-    showToast("That folder does not contain supported image files.");
-    return;
+async function loadSelectedFileEntries(fileEntries, datasetName) {
+  const entries = fileEntries.filter(({ file }) => isSupportedImageFile(file));
+  if (entries.length === 0) {
+    showToast("That selection does not contain supported image files.");
+    return null;
   }
 
-  const firstFullPath = files[0].webkitRelativePath || files[0].name;
-  const rootName = firstFullPath.includes("/") ? firstFullPath.split("/")[0] : "Selected images";
-  const descriptors = files.map((file) => {
-    const fullPath = file.webkitRelativePath || file.name;
-    const pathParts = fullPath.split("/");
-    const relativePath = pathParts.length > 1 && pathParts[0] === rootName
-      ? pathParts.slice(1).join("/")
-      : fullPath;
+  const descriptors = entries.map(({ file, relativePath }) => {
     const objectUrl = URL.createObjectURL(file);
     return {
-      relative_path: relativePath,
+      relative_path: relativePath || file.name,
       name: file.name,
       file_size: file.size,
       last_modified: file.lastModified,
@@ -442,19 +435,70 @@ async function loadFolderFiles(fileList) {
       objectUrl,
     };
   });
-  const datasetName = rootName;
   const storageKey = storageKeyForDataset(datasetName, descriptors);
   let session = createSession(datasetName);
+  let restored = false;
   const saved = localStorage.getItem(storageKey);
   if (saved) {
     try {
       session = normalizeSession(JSON.parse(saved));
-      showToast("Restored the browser autosave for this folder.");
+      restored = true;
     } catch (error) {
       console.warn("Could not restore saved session", error);
     }
   }
   await setDataset(descriptors, datasetName, session, { mode: "folder", storageKey });
+  return { count: descriptors.length, restored };
+}
+
+async function loadFolderFiles(fileList) {
+  const files = Array.from(fileList);
+  if (files.length === 0) {
+    return;
+  }
+
+  const firstFullPath = files[0].webkitRelativePath || files[0].name;
+  const rootName = firstFullPath.includes("/") ? firstFullPath.split("/")[0] : "Selected images";
+  const fileEntries = files.map((file) => {
+    const fullPath = file.webkitRelativePath || file.name;
+    const pathParts = fullPath.split("/");
+    const relativePath = pathParts.length > 1 && pathParts[0] === rootName
+      ? pathParts.slice(1).join("/")
+      : fullPath;
+    return { file, relativePath };
+  });
+  const result = await loadSelectedFileEntries(fileEntries, rootName);
+  if (result) {
+    const restoredText = result.restored ? " Browser autosave restored." : "";
+    showToast(`Loaded ${result.count} image${result.count === 1 ? "" : "s"}.${restoredText}`, 5000);
+  }
+}
+
+async function openImageFolder() {
+  if (typeof window.showDirectoryPicker !== "function") {
+    elements.folderInput.click();
+    return;
+  }
+
+  try {
+    const directoryHandle = await window.showDirectoryPicker({
+      id: "coral-scribbler-images",
+      mode: "read",
+    });
+    showToast("Reading the selected folder...", 30000);
+    const fileEntries = await readDirectoryFiles(directoryHandle);
+    const result = await loadSelectedFileEntries(fileEntries, directoryHandle.name || "Selected images");
+    if (result) {
+      const restoredText = result.restored ? " Browser autosave restored." : "";
+      showToast(`Loaded ${result.count} image${result.count === 1 ? "" : "s"}.${restoredText}`, 5000);
+    }
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      return;
+    }
+    console.error("Could not open image folder", error);
+    showToast("The browser could not open that folder. Choose individual image files instead.", 6500);
+  }
 }
 
 async function loadServerDataset(config) {
@@ -1079,6 +1123,11 @@ function handleKeyDown(event) {
 function wireEvents() {
   document.querySelectorAll("[data-tool]").forEach((button) => {
     button.addEventListener("click", () => setTool(button.dataset.tool));
+  });
+  document.querySelectorAll("[data-open-folder]").forEach((button) => {
+    button.addEventListener("click", () => {
+      void openImageFolder();
+    });
   });
   elements.brushSize.addEventListener("input", () => setBrushDiameter(elements.brushSize.value));
   elements.folderInput.addEventListener("change", async () => {
