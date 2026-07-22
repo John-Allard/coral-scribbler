@@ -1046,6 +1046,43 @@ kbd,
   .workspace {
     min-height: 70vh;
   }
+
+  .canvas-toolbar {
+    min-width: 0;
+    overflow-x: auto;
+  }
+
+  .canvas-toolbar .save-status {
+    display: none;
+  }
+
+  .canvas-toolbar .toolbar-group {
+    flex: 0 0 auto;
+  }
+
+  .empty-state {
+    padding-inline: 20px;
+  }
+
+  .empty-state h2 {
+    max-width: 100%;
+    font-size: clamp(27px, 9vw, 42px);
+  }
+
+  .empty-alternatives {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 520px) {
+  .tool-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .canvas-toolbar .toolbar-button kbd {
+    display: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
