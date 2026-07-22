@@ -6,18 +6,23 @@ export function isSupportedImageFile(file) {
   return mediaType.startsWith("image/") || IMAGE_EXTENSIONS.test(name);
 }
 
-export async function readDirectoryFiles(directoryHandle, pathPrefix = "") {
-  const fileEntries = [];
-  for await (const [name, entryHandle] of directoryHandle.entries()) {
-    const relativePath = pathPrefix ? `${pathPrefix}/${name}` : name;
-    if (entryHandle.kind === "directory") {
-      fileEntries.push(...await readDirectoryFiles(entryHandle, relativePath));
-    } else if (entryHandle.kind === "file") {
-      const file = await entryHandle.getFile();
-      if (isSupportedImageFile(file)) {
-        fileEntries.push({ file, relativePath });
-      }
-    }
+export function describeFileSelection(fileList) {
+  const files = Array.from(fileList || []);
+  if (files.length === 0) {
+    return { datasetName: "Selected images", fileEntries: [] };
   }
-  return fileEntries;
+
+  const firstFullPath = files[0].webkitRelativePath || files[0].name;
+  const datasetName = firstFullPath.includes("/")
+    ? firstFullPath.split("/")[0]
+    : "Selected images";
+  const fileEntries = files.map((file) => {
+    const fullPath = file.webkitRelativePath || file.name;
+    const pathParts = fullPath.split("/");
+    const relativePath = pathParts.length > 1 && pathParts[0] === datasetName
+      ? pathParts.slice(1).join("/")
+      : fullPath;
+    return { file, relativePath };
+  });
+  return { datasetName, fileEntries };
 }
