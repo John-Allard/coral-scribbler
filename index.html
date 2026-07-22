@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f2ede2">
+  <title>Coral Scribbler</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23dc684d'/%3E%3Cpath d='M15 26V7m0 7-6-5m6 9 7-6' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-block">
+        <span class="brand-mark" aria-hidden="true"></span>
+        <div>
+          <h1>Coral Scribbler</h1>
+          <p>Rubble and sediment, without the clutter.</p>
+        </div>
+      </div>
+
+      <div class="dataset-summary" aria-live="polite">
+        <span class="eyebrow">Dataset</span>
+        <strong id="datasetName">No folder loaded</strong>
+        <span id="progressText">0 of 0 reviewed</span>
+      </div>
+
+      <div class="top-actions">
+        <label class="button button-primary" for="folderInput">Open image folder</label>
+        <input id="folderInput" class="visually-hidden" type="file" accept="image/*" webkitdirectory multiple>
+        <input id="fileInput" class="visually-hidden" type="file" accept="image/*" multiple>
+        <button id="importButton" class="button" type="button">Import JSON</button>
+        <input id="importInput" class="visually-hidden" type="file" accept="application/json,.json">
+        <button id="exportJsonButton" class="button" type="button" disabled>Export JSON</button>
+        <button id="exportCsvButton" class="button" type="button" disabled>Export CSV</button>
+        <button id="helpButton" class="icon-button" type="button" aria-label="Show keyboard shortcuts">?</button>
+      </div>
+    </header>
+
+    <aside class="tool-panel">
+      <section class="panel-section identity-section">
+        <label for="annotatorInput">Annotator</label>
+        <input id="annotatorInput" type="text" autocomplete="name" placeholder="Your name">
+        <p class="field-note">Saved with every exported session.</p>
+      </section>
+
+      <section class="panel-section">
+        <div class="section-heading">
+          <span>Paint</span>
+          <span class="section-hint">Keyboard: R / S / U</span>
+        </div>
+        <div class="label-stack" role="radiogroup" aria-label="Annotation class">
+          <button class="label-button active" data-tool="rubble" type="button" role="radio" aria-checked="true">
+            <span class="label-swatch rubble"></span>
+            <span><strong>Rubble</strong><small>Dead coral, not standing</small></span>
+            <kbd>R</kbd>
+          </button>
+          <button class="label-button" data-tool="sediment" type="button" role="radio" aria-checked="false">
+            <span class="label-swatch sediment"></span>
+            <span><strong>Sediment</strong><small>Unconsolidated substrate</small></span>
+            <kbd>S</kbd>
+          </button>
+          <button class="label-button" data-tool="unsure" type="button" role="radio" aria-checked="false">
+            <span class="label-swatch unsure"></span>
+            <span><strong>Unsure</strong><small>Recorded, excluded from training</small></span>
+            <kbd>U</kbd>
+          </button>
+          <button class="label-button eraser-button" data-tool="eraser" type="button" role="radio" aria-checked="false">
+            <span class="eraser-symbol" aria-hidden="true"></span>
+            <span><strong>Stroke eraser</strong><small>Touch a stroke to remove it</small></span>
+            <kbd>E</kbd>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel-section brush-section">
+        <div class="section-heading">
+          <label for="brushSize">Brush diameter</label>
+          <output id="brushValue" for="brushSize">24 px</output>
+        </div>
+        <input id="brushSize" type="range" min="4" max="96" step="2" value="24">
+        <p class="field-note">Diameter is stored in original-image pixels.</p>
+      </section>
+
+      <section class="panel-section image-queue-section">
+        <div class="section-heading">
+          <span>Image queue</span>
+          <span id="queueCount" class="section-hint">0 images</span>
+        </div>
+        <input id="imageSearch" class="search-input" type="search" placeholder="Filter filenames" disabled>
+        <div id="imageList" class="image-list" role="listbox" aria-label="Images"></div>
+      </section>
+    </aside>
+
+    <main class="workspace">
+      <div class="canvas-toolbar">
+        <div class="toolbar-group">
+          <button id="fitButton" class="toolbar-button" type="button" disabled>Fit <kbd>F</kbd></button>
+          <button id="zoomOutButton" class="toolbar-button compact" type="button" aria-label="Zoom out" disabled>-</button>
+          <span id="zoomText" class="zoom-readout">100%</span>
+          <button id="zoomInButton" class="toolbar-button compact" type="button" aria-label="Zoom in" disabled>+</button>
+        </div>
+        <div class="toolbar-group">
+          <button id="overlayButton" class="toolbar-button active" type="button" aria-pressed="true" disabled>Overlay <kbd>O</kbd></button>
+          <button id="undoButton" class="toolbar-button" type="button" disabled>Undo</button>
+          <button id="redoButton" class="toolbar-button" type="button" disabled>Redo</button>
+        </div>
+        <div id="saveStatus" class="save-status" data-state="idle">
+          <span class="status-dot"></span>
+          <span>Waiting for images</span>
+        </div>
+      </div>
+
+      <div id="canvasStage" class="canvas-stage">
+        <canvas id="annotationCanvas" aria-label="Image annotation canvas"></canvas>
+        <div id="emptyState" class="empty-state">
+          <span class="empty-kicker">Start here</span>
+          <h2>Choose a folder of coral images</h2>
+          <p>Images stay on this computer. Paint only areas you can classify confidently; boundaries can remain blank.</p>
+          <label class="button button-primary button-large" for="folderInput">Open image folder</label>
+          <div class="empty-alternatives">
+            <label class="text-button" for="fileInput">Choose individual image files</label>
+            <span aria-hidden="true">or</span>
+            <button id="demoButton" class="text-button" type="button">try a demo image</button>
+          </div>
+          <small class="privacy-note">No images or annotations are uploaded. Export JSON before changing browsers or computers.</small>
+        </div>
+        <div id="loadingState" class="loading-state" hidden>
+          <span class="loader"></span>
+          <span>Loading image</span>
+        </div>
+      </div>
+
+      <div class="image-nav">
+        <button id="previousButton" class="nav-button" type="button" disabled><span aria-hidden="true">&#8592;</span> Previous</button>
+        <div class="image-title-block">
+          <strong id="currentImageName">No image selected</strong>
+          <span id="currentImageMeta">Open a folder to begin</span>
+        </div>
+        <button id="nextButton" class="nav-button" type="button" disabled>Next <span aria-hidden="true">&#8594;</span></button>
+      </div>
+    </main>
+
+    <aside class="review-panel">
+      <section class="review-card current-card">
+        <span class="eyebrow">Current image</span>
+        <div class="review-state-line">
+          <strong id="reviewState">Not loaded</strong>
+          <span id="imagePosition">0 / 0</span>
+        </div>
+        <div class="class-count-grid">
+          <div><span class="count-dot rubble"></span><strong id="rubbleCount">0</strong><small>rubble strokes</small></div>
+          <div><span class="count-dot sediment"></span><strong id="sedimentCount">0</strong><small>sediment strokes</small></div>
+          <div><span class="count-dot unsure"></span><strong id="unsureCount">0</strong><small>unsure strokes</small></div>
+        </div>
+        <button id="reviewNextButton" class="button button-primary review-button" type="button" disabled>Mark reviewed + next</button>
+        <p class="review-note">An image can be reviewed with no strokes if it contains no useful rubble or sediment examples.</p>
+      </section>
+
+      <section class="review-card">
+        <label for="imageNotes">Image note</label>
+        <textarea id="imageNotes" rows="4" placeholder="Optional: why this image is difficult" disabled></textarea>
+      </section>
+
+      <section class="review-card guidance-card">
+        <span class="eyebrow">Good annotations</span>
+        <ol>
+          <li>Paint interiors, not boundaries.</li>
+          <li>Use several short strokes across different appearances.</li>
+          <li>Leave live coral, DSC, water, and vehicle parts untouched.</li>
+          <li>Use Unsure only to record genuinely confusing examples.</li>
+        </ol>
+      </section>
+
+      <section class="review-card navigation-card">
+        <span class="eyebrow">Navigate</span>
+        <dl>
+          <div><dt>Pan</dt><dd>Space + drag</dd></div>
+          <div><dt>Zoom</dt><dd>Mouse wheel</dd></div>
+          <div><dt>Images</dt><dd>&larr; / &rarr;</dd></div>
+          <div><dt>Review + next</dt><dd>Enter</dd></div>
+        </dl>
+      </section>
+    </aside>
+  </div>
+
+  <dialog id="helpDialog" class="help-dialog">
+    <form method="dialog">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">Reference</span>
+          <h2>Keyboard shortcuts</h2>
+        </div>
+        <button class="icon-button" value="close" aria-label="Close help">&#215;</button>
+      </div>
+      <div class="shortcut-grid">
+        <div><kbd>R</kbd><span>Rubble brush</span></div>
+        <div><kbd>S</kbd><span>Sediment brush</span></div>
+        <div><kbd>U</kbd><span>Unsure brush</span></div>
+        <div><kbd>E</kbd><span>Stroke eraser</span></div>
+        <div><kbd>[</kbd> <kbd>]</kbd><span>Change brush size</span></div>
+        <div><kbd>F</kbd><span>Fit image</span></div>
+        <div><kbd>O</kbd><span>Toggle overlay</span></div>
+        <div><kbd>Ctrl</kbd> + <kbd>Z</kbd><span>Undo</span></div>
+        <div><kbd>&larr;</kbd> <kbd>&rarr;</kbd><span>Previous / next image</span></div>
+        <div><kbd>Enter</kbd><span>Mark reviewed and continue</span></div>
+        <div><kbd>Space</kbd> + drag<span>Pan image</span></div>
+        <div><span class="wheel-symbol">wheel</span><span>Zoom under pointer</span></div>
+      </div>
+      <p class="dialog-footnote">The app stores source-image coordinates, not screen coordinates, so zooming does not change the labels.</p>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="app.mjs"></script>
+</body>
+</html>

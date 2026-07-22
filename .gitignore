@@ -1,0 +1,5 @@
+.DS_Store
+Thumbs.db
+coral-scribbles-*.json
+coral-scribbles-*.csv
+annotations/
