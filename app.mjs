@@ -1,12 +1,17 @@
 import {
   CLASS_DEFINITIONS,
+  DOT_CLASS_DEFINITIONS,
+  DOTS_PER_IMAGE,
   createSession,
   documentForExport,
   ensureImage,
+  ensureDotQueries,
+  imageDotSummary,
   imageStrokeCounts,
   naturalCompare,
   normalizeSession,
   randomId,
+  sessionDotSummary,
   sessionFromCsv,
   sessionToCsv,
   storageKeyForDataset,
@@ -46,6 +51,7 @@ const elements = {
   zoomInButton: $("zoomInButton"),
   zoomText: $("zoomText"),
   overlayButton: $("overlayButton"),
+  overlayLabel: $("overlayLabel"),
   undoButton: $("undoButton"),
   redoButton: $("redoButton"),
   saveStatus: $("saveStatus"),
@@ -58,6 +64,15 @@ const elements = {
   rubbleCount: $("rubbleCount"),
   sedimentCount: $("sedimentCount"),
   unsureCount: $("unsureCount"),
+  activeDotLabel: $("activeDotLabel"),
+  dotProgressCount: $("dotProgressCount"),
+  dotEligibilityText: $("dotEligibilityText"),
+  dotProgressBar: $("dotProgressBar"),
+  dotLiveCount: $("dotLiveCount"),
+  dotDscCount: $("dotDscCount"),
+  dotRubbleCount: $("dotRubbleCount"),
+  dotSedimentCount: $("dotSedimentCount"),
+  dotUnknownCount: $("dotUnknownCount"),
   reviewNextButton: $("reviewNextButton"),
   imageNotes: $("imageNotes"),
   demoButton: $("demoButton"),
@@ -65,6 +80,7 @@ const elements = {
 };
 
 const classById = Object.fromEntries(CLASS_DEFINITIONS.map((item) => [item.id, item]));
+const dotClassById = Object.fromEntries(DOT_CLASS_DEFINITIONS.map((item) => [item.id, item]));
 const ctx = elements.canvas.getContext("2d", { alpha: false });
 
 const state = {
@@ -73,6 +89,7 @@ const state = {
   currentIndex: -1,
   imageElement: null,
   imageLoadToken: 0,
+  annotationMode: "dot",
   activeTool: "rubble",
   brushDiameter: 24,
   showOverlay: true,
@@ -128,6 +145,7 @@ function descriptorPaths() {
 function snapshotRecord(record) {
   return structuredClone({
     strokes: record.strokes,
+    dots: record.dots,
     review_status: record.review_status,
     reviewed_at_utc: record.reviewed_at_utc,
     notes: record.notes,
@@ -136,6 +154,7 @@ function snapshotRecord(record) {
 
 function restoreRecord(record, snapshot) {
   record.strokes = structuredClone(snapshot.strokes);
+  record.dots = structuredClone(snapshot.dots || []);
   record.review_status = snapshot.review_status;
   record.reviewed_at_utc = snapshot.reviewed_at_utc;
   record.notes = snapshot.notes;
@@ -255,6 +274,70 @@ function setTool(toolId) {
   render();
 }
 
+function setAnnotationMode(mode, { save = true } = {}) {
+  if (!["dot", "scribble"].includes(mode)) {
+    return;
+  }
+  cancelPointerOperation(true);
+  state.annotationMode = mode;
+  state.session.annotation_mode = mode;
+  document.body.dataset.annotationMode = mode;
+  elements.overlayLabel.textContent = mode === "dot" ? "Markers" : "Overlay";
+  document.querySelectorAll("[data-annotation-mode]").forEach((button) => {
+    const active = button.dataset.annotationMode === mode;
+    button.classList.toggle("active", active);
+    button.setAttribute("aria-pressed", String(active));
+  });
+  if (mode === "dot") {
+    ensureCurrentDotQueries();
+  }
+  if (save && state.descriptors.length) {
+    scheduleSave();
+  }
+  updateInterface();
+  render();
+}
+
+function ensureCurrentDotQueries() {
+  const record = currentRecord();
+  if (!record || record.width <= 0 || record.height <= 0) {
+    return false;
+  }
+  const beforeCount = record.dots?.length || 0;
+  ensureDotQueries(record, state.session.dot_target_count || DOTS_PER_IMAGE);
+  return record.dots.length !== beforeCount;
+}
+
+function activeDot(record = currentRecord()) {
+  const target = state.session.dot_target_count || DOTS_PER_IMAGE;
+  return (record?.dots || [])
+    .slice()
+    .sort((left, right) => left.index - right.index)
+    .slice(0, target)
+    .find((dot) => !dot.class_id) || null;
+}
+
+function classifyActiveDot(classId) {
+  if (state.annotationMode !== "dot" || !dotClassById[classId]) {
+    return;
+  }
+  const record = currentRecord();
+  const dot = activeDot(record);
+  if (!record || !dot) {
+    return;
+  }
+  const before = snapshotRecord(record);
+  dot.class_id = classId;
+  dot.classified_at_utc = new Date().toISOString();
+  const summary = imageDotSummary(record, state.session.dot_target_count);
+  record.review_status = summary.complete ? "reviewed" : "in_progress";
+  record.reviewed_at_utc = summary.complete ? new Date().toISOString() : null;
+  commitMutation(before);
+  if (summary.complete) {
+    showToast("Image complete. Press Enter for the next image.");
+  }
+}
+
 function setBrushDiameter(value) {
   state.brushDiameter = Math.max(4, Math.min(96, Number(value) || 24));
   elements.brushSize.value = String(state.brushDiameter);
@@ -299,7 +382,9 @@ function updateInterface() {
 
   const paths = descriptorPaths();
   const summary = summarizeSession(state.session, paths);
-  elements.progressText.textContent = `${summary.reviewed_count} of ${summary.image_count} reviewed`;
+  elements.progressText.textContent = state.annotationMode === "dot"
+    ? `${summary.dot_complete_image_count} of ${summary.image_count} completed`
+    : `${summary.reviewed_count} of ${summary.image_count} reviewed`;
   elements.queueCount.textContent = `${summary.image_count} image${summary.image_count === 1 ? "" : "s"}`;
 
   const descriptor = currentDescriptor();
@@ -312,23 +397,67 @@ function updateInterface() {
     elements.rubbleCount.textContent = "0";
     elements.sedimentCount.textContent = "0";
     elements.unsureCount.textContent = "0";
+    elements.activeDotLabel.textContent = "Load images to begin";
+    elements.dotProgressCount.textContent = `0 / ${state.session.dot_target_count || DOTS_PER_IMAGE}`;
+    elements.dotEligibilityText.textContent = "Not started";
+    elements.dotProgressBar.style.width = "0%";
+    elements.dotLiveCount.textContent = "0";
+    elements.dotDscCount.textContent = "0";
+    elements.dotRubbleCount.textContent = "0";
+    elements.dotSedimentCount.textContent = "0";
+    elements.dotUnknownCount.textContent = "0";
     elements.imageNotes.value = "";
   } else {
     const counts = imageStrokeCounts(record);
+    const dotSummary = imageDotSummary(record, state.session.dot_target_count);
     elements.currentImageName.textContent = descriptor.name;
-    elements.currentImageMeta.textContent = record.width && record.height
-      ? `${record.width} x ${record.height} px | ${counts.total} stroke${counts.total === 1 ? "" : "s"}`
-      : "Loading image dimensions";
-    elements.reviewState.textContent = reviewStatusLabel(record.review_status);
+    if (record.width && record.height) {
+      elements.currentImageMeta.textContent = state.annotationMode === "dot"
+        ? `${record.width} x ${record.height} px | ${dotSummary.classified_count}/${dotSummary.target_count} dots`
+        : `${record.width} x ${record.height} px | ${counts.total} stroke${counts.total === 1 ? "" : "s"}`;
+    } else {
+      elements.currentImageMeta.textContent = "Loading image dimensions";
+    }
+    if (state.annotationMode === "dot") {
+      if (dotSummary.complete) {
+        elements.reviewState.textContent = dotSummary.eligible ? "Complete - included" : "Complete - excluded";
+      } else {
+        elements.reviewState.textContent = `Dot ${dotSummary.classified_count + 1} of ${dotSummary.target_count}`;
+      }
+    } else {
+      elements.reviewState.textContent = reviewStatusLabel(record.review_status);
+    }
     elements.imagePosition.textContent = `${state.currentIndex + 1} / ${state.descriptors.length}`;
     elements.rubbleCount.textContent = String(counts.rubble);
     elements.sedimentCount.textContent = String(counts.sediment);
     elements.unsureCount.textContent = String(counts.unsure);
+    elements.dotProgressCount.textContent = `${dotSummary.classified_count} / ${dotSummary.target_count}`;
+    elements.dotProgressBar.style.width = `${Math.min(100, dotSummary.classified_count / dotSummary.target_count * 100)}%`;
+    elements.dotLiveCount.textContent = String(dotSummary.counts.live);
+    elements.dotDscCount.textContent = String(dotSummary.counts.dsc);
+    elements.dotRubbleCount.textContent = String(dotSummary.counts.rubble);
+    elements.dotSedimentCount.textContent = String(dotSummary.counts.sediment);
+    elements.dotUnknownCount.textContent = String(dotSummary.counts.unknown_other);
+    if (dotSummary.complete) {
+      const unknownPercent = Math.round((dotSummary.unknown_fraction || 0) * 100);
+      elements.dotEligibilityText.textContent = dotSummary.eligible
+        ? `${unknownPercent}% unknown - included`
+        : `${unknownPercent}% unknown - excluded`;
+      elements.activeDotLabel.textContent = "Image complete - press Enter";
+    } else {
+      const remaining = dotSummary.target_count - dotSummary.classified_count;
+      elements.dotEligibilityText.textContent = `${remaining} remaining`;
+      elements.activeDotLabel.textContent = `Dot ${dotSummary.classified_count + 1} of ${dotSummary.target_count}`;
+    }
     if (document.activeElement !== elements.imageNotes) {
       elements.imageNotes.value = record.notes || "";
     }
   }
 
+  const canClassify = hasImages && state.annotationMode === "dot" && Boolean(activeDot());
+  document.querySelectorAll("[data-dot-class]").forEach((button) => {
+    button.disabled = !canClassify;
+  });
   const history = historyForCurrentImage();
   elements.undoButton.disabled = !hasImages || !history || history.undo.length === 0;
   elements.redoButton.disabled = !hasImages || !history || history.redo.length === 0;
@@ -358,9 +487,18 @@ function updateImageList() {
   for (const { descriptor, index } of matches) {
     const record = state.session.images[descriptor.relative_path];
     const counts = imageStrokeCounts(record);
+    const dotSummary = imageDotSummary(record, state.session.dot_target_count);
+    let queueState = record?.review_status || "unreviewed";
+    let queueCount = counts.total || "";
+    if (state.annotationMode === "dot") {
+      queueState = dotSummary.complete
+        ? "reviewed"
+        : dotSummary.classified_count > 0 ? "in_progress" : "unreviewed";
+      queueCount = `${dotSummary.classified_count}/${dotSummary.target_count}`;
+    }
     const button = document.createElement("button");
     button.type = "button";
-    button.className = `image-list-item ${record?.review_status || "unreviewed"}`;
+    button.className = `image-list-item ${queueState}`;
     button.classList.toggle("active", index === state.currentIndex);
     button.setAttribute("role", "option");
     button.setAttribute("aria-selected", String(index === state.currentIndex));
@@ -368,7 +506,7 @@ function updateImageList() {
     button.innerHTML = `
       <span class="queue-state" aria-hidden="true"></span>
       <span class="image-list-name"></span>
-      <span class="image-list-count">${counts.total || ""}</span>
+      <span class="image-list-count">${queueCount}</span>
     `;
     button.querySelector(".image-list-name").textContent = descriptor.name;
     button.addEventListener("click", () => loadImage(index));
@@ -392,6 +530,7 @@ async function setDataset(descriptors, datasetName, session, options = {}) {
   state.descriptors = descriptors.slice().sort((a, b) => naturalCompare(a.relative_path, b.relative_path));
   state.session = session || createSession(datasetName);
   state.session.dataset_name = datasetName;
+  state.annotationMode = state.session.annotation_mode || "dot";
   state.mode = options.mode || "folder";
   state.serverSaveEnabled = Boolean(options.serverSaveEnabled);
   state.storageKey = options.storageKey || storageKeyForDataset(datasetName, state.descriptors);
@@ -407,11 +546,19 @@ async function setDataset(descriptors, datasetName, session, options = {}) {
   }
 
   elements.imageSearch.value = "";
+  setAnnotationMode(state.annotationMode, { save: false });
   updateInterface();
   if (state.descriptors.length > 0) {
-    const firstUnreviewed = state.descriptors.findIndex((descriptor) => (
-      state.session.images[descriptor.relative_path]?.review_status !== "reviewed"
-    ));
+    const firstUnreviewed = state.annotationMode === "dot"
+      ? state.descriptors.findIndex((descriptor) => (
+        !imageDotSummary(
+          state.session.images[descriptor.relative_path],
+          state.session.dot_target_count,
+        ).complete
+      ))
+      : state.descriptors.findIndex((descriptor) => (
+        state.session.images[descriptor.relative_path]?.review_status !== "reviewed"
+      ));
     await loadImage(firstUnreviewed >= 0 ? firstUnreviewed : 0);
     setSaveStatus(
       "saved",
@@ -595,6 +742,9 @@ async function loadImage(index) {
     descriptor.width = image.naturalWidth;
     descriptor.height = image.naturalHeight;
     ensureImage(state.session, descriptor);
+    if (state.annotationMode === "dot" && ensureCurrentDotQueries()) {
+      scheduleSave();
+    }
     fitImage();
   } catch (error) {
     console.error(error);
@@ -707,6 +857,43 @@ function drawStroke(stroke, alpha = state.overlayOpacity) {
   ctx.restore();
 }
 
+function drawDotMarker(dot, isActive = false) {
+  const [x, y] = imageToCanvas(dot.x, dot.y);
+  ctx.save();
+  if (isActive) {
+    ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
+    ctx.shadowBlur = 6;
+    ctx.fillStyle = "#f6f2e7";
+    ctx.strokeStyle = "#d7503f";
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(x, y, 10, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = "#d7503f";
+    ctx.beginPath();
+    ctx.arc(x, y, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    const definition = dotClassById[dot.class_id];
+    if (!definition) {
+      ctx.restore();
+      return;
+    }
+    ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
+    ctx.shadowBlur = 3;
+    ctx.fillStyle = definition.color;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.94)";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(x, y, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
 function render() {
   const { width, height, dpr } = state.canvasSize;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -728,14 +915,26 @@ function render() {
   ctx.beginPath();
   ctx.rect(state.view.offsetX, state.view.offsetY, drawWidth, drawHeight);
   ctx.clip();
-  if (state.showOverlay) {
-    const record = currentRecord();
-    for (const stroke of record?.strokes || []) {
-      drawStroke(stroke);
+  const record = currentRecord();
+  if (state.annotationMode === "dot") {
+    if (state.showOverlay) {
+      for (const dot of record?.dots || []) {
+        if (dot.class_id) {
+          drawDotMarker(dot);
+        }
+      }
     }
-    if (state.currentStroke) {
-      drawStroke(state.currentStroke, 0.92);
+    const queryDot = activeDot(record);
+    if (queryDot) {
+      drawDotMarker(queryDot, true);
     }
+  } else if (state.showOverlay) {
+      for (const stroke of record?.strokes || []) {
+        drawStroke(stroke);
+      }
+      if (state.currentStroke) {
+        drawStroke(state.currentStroke, 0.92);
+      }
   }
   ctx.restore();
 
@@ -743,7 +942,7 @@ function render() {
   ctx.lineWidth = 1;
   ctx.strokeRect(state.view.offsetX + 0.5, state.view.offsetY + 0.5, drawWidth - 1, drawHeight - 1);
 
-  if (state.cursor.visible && !state.pointer?.isPanning) {
+  if (state.annotationMode === "scribble" && state.cursor.visible && !state.pointer?.isPanning) {
     const definition = classById[state.activeTool];
     const radius = Math.max(3, state.brushDiameter * state.view.scale / 2);
     ctx.save();
@@ -856,6 +1055,9 @@ function beginPointer(event) {
       lastCanvasY: canvasY,
     };
     elements.stage.classList.add("is-panning");
+    return;
+  }
+  if (state.annotationMode === "dot") {
     return;
   }
   if (event.button !== 0) {
@@ -983,6 +1185,19 @@ function markReviewedAndNext() {
   if (!record) {
     return;
   }
+  if (state.annotationMode === "dot") {
+    const summary = imageDotSummary(record, state.session.dot_target_count);
+    if (!summary.complete) {
+      showToast(`Classify ${summary.target_count - summary.classified_count} more dots before continuing.`);
+      return;
+    }
+    if (state.currentIndex < state.descriptors.length - 1) {
+      loadImage(state.currentIndex + 1);
+    } else {
+      showToast("All loaded images have been reached. Export CSV or revisit an image.");
+    }
+    return;
+  }
   const before = snapshotRecord(record);
   record.review_status = "reviewed";
   record.reviewed_at_utc = new Date().toISOString();
@@ -1017,7 +1232,7 @@ function exportBaseName() {
     .toLocaleLowerCase()
     .replace(/[^a-z0-9]+/g, "_")
     .replace(/^_+|_+$/g, "")
-    .slice(0, 80) || "coral_scribbles";
+    .slice(0, 80) || "coral_annotations";
   const date = new Date().toISOString().slice(0, 10);
   return `${safeName}_${date}`;
 }
@@ -1027,7 +1242,15 @@ function exportCsv() {
     new Blob([sessionToCsv(state.session)], { type: "text/csv;charset=utf-8" }),
     `${exportBaseName()}.csv`,
   );
-  showToast("CSV annotation file exported.");
+  if (state.annotationMode === "dot") {
+    const summary = sessionDotSummary(state.session, descriptorPaths());
+    showToast(
+      `CSV exported: ${summary.eligible_image_count} included, ${summary.excluded_image_count} excluded, ${summary.incomplete_image_count} incomplete.`,
+      5000,
+    );
+  } else {
+    showToast("CSV annotation file exported.");
+  }
 }
 
 async function importCsvFile(file) {
@@ -1037,6 +1260,7 @@ async function importCsvFile(file) {
     for (const descriptor of state.descriptors) {
       ensureImage(state.session, descriptor);
     }
+    setAnnotationMode(imported.annotation_mode || "dot", { save: false });
     state.histories.clear();
     scheduleSave();
     updateInterface();
@@ -1076,8 +1300,22 @@ function handleKeyDown(event) {
     return;
   }
   const key = event.key.toLocaleLowerCase();
+  if (state.annotationMode === "dot") {
+    const dotKeys = {
+      l: "live",
+      d: "dsc",
+      r: "rubble",
+      s: "sediment",
+      u: "unknown_other",
+    };
+    if (dotKeys[key]) {
+      event.preventDefault();
+      classifyActiveDot(dotKeys[key]);
+      return;
+    }
+  }
   const toolKeys = { r: "rubble", s: "sediment", u: "unsure", e: "eraser" };
-  if (toolKeys[key]) {
+  if (state.annotationMode === "scribble" && toolKeys[key]) {
     setTool(toolKeys[key]);
     return;
   }
@@ -1102,6 +1340,12 @@ function handleKeyDown(event) {
 }
 
 function wireEvents() {
+  document.querySelectorAll("[data-annotation-mode]").forEach((button) => {
+    button.addEventListener("click", () => setAnnotationMode(button.dataset.annotationMode));
+  });
+  document.querySelectorAll("[data-dot-class]").forEach((button) => {
+    button.addEventListener("click", () => classifyActiveDot(button.dataset.dotClass));
+  });
   document.querySelectorAll("[data-tool]").forEach((button) => {
     button.addEventListener("click", () => setTool(button.dataset.tool));
   });
@@ -1209,6 +1453,7 @@ function wireEvents() {
 
 async function initialize() {
   wireEvents();
+  setAnnotationMode("dot", { save: false });
   setTool("rubble");
   setBrushDiameter(24);
   resizeCanvas();

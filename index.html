@@ -8,7 +8,7 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23dc684d'/%3E%3Cpath d='M15 26V7m0 7-6-5m6 9 7-6' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body data-annotation-mode="dot">
   <div class="app-shell">
     <header class="topbar">
       <div class="brand-block">
@@ -42,7 +42,23 @@
         <p class="field-note">Saved with every exported session.</p>
       </section>
 
-      <section class="panel-section">
+      <section class="panel-section mode-section">
+        <div class="section-heading">
+          <span>Annotation mode</span>
+        </div>
+        <div class="mode-switch" role="group" aria-label="Annotation mode">
+          <button class="mode-button active" data-annotation-mode="dot" type="button" aria-pressed="true">
+            <strong>50-dot count</strong>
+            <small>Default</small>
+          </button>
+          <button class="mode-button" data-annotation-mode="scribble" type="button" aria-pressed="false">
+            <strong>Scribble</strong>
+            <small>Optional</small>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel-section" data-mode-panel="scribble">
         <div class="section-heading">
           <span>Paint</span>
           <span class="section-hint">Keyboard: R / S / U</span>
@@ -71,7 +87,7 @@
         </div>
       </section>
 
-      <section class="panel-section brush-section">
+      <section class="panel-section brush-section" data-mode-panel="scribble">
         <div class="section-heading">
           <label for="brushSize">Brush diameter</label>
           <output id="brushValue" for="brushSize">24 px</output>
@@ -99,7 +115,7 @@
           <button id="zoomInButton" class="toolbar-button compact" type="button" aria-label="Zoom in" disabled>+</button>
         </div>
         <div class="toolbar-group">
-          <button id="overlayButton" class="toolbar-button active" type="button" aria-pressed="true" disabled>Overlay <kbd>O</kbd></button>
+          <button id="overlayButton" class="toolbar-button active" type="button" aria-pressed="true" disabled><span id="overlayLabel">Markers</span> <kbd>O</kbd></button>
           <button id="undoButton" class="toolbar-button" type="button" disabled>Undo</button>
           <button id="redoButton" class="toolbar-button" type="button" disabled>Redo</button>
         </div>
@@ -109,12 +125,36 @@
         </div>
       </div>
 
+      <div id="dotClassifier" class="dot-classifier" data-mode-panel="dot">
+        <div class="dot-query-status">
+          <span>Current query</span>
+          <strong id="activeDotLabel">Load images to begin</strong>
+        </div>
+        <div class="dot-class-buttons" role="group" aria-label="Classify current dot">
+          <button class="dot-class-button live" data-dot-class="live" type="button" disabled>
+            <span class="dot-button-swatch"></span><strong>Live</strong><kbd>L</kbd>
+          </button>
+          <button class="dot-class-button dsc" data-dot-class="dsc" type="button" disabled>
+            <span class="dot-button-swatch"></span><strong>DSC</strong><kbd>D</kbd>
+          </button>
+          <button class="dot-class-button rubble" data-dot-class="rubble" type="button" disabled>
+            <span class="dot-button-swatch"></span><strong>Rubble</strong><kbd>R</kbd>
+          </button>
+          <button class="dot-class-button sediment" data-dot-class="sediment" type="button" disabled>
+            <span class="dot-button-swatch"></span><strong>Sediment</strong><kbd>S</kbd>
+          </button>
+          <button class="dot-class-button unknown-other" data-dot-class="unknown_other" type="button" disabled>
+            <span class="dot-button-swatch"></span><strong>Unknown / other</strong><kbd>U</kbd>
+          </button>
+        </div>
+      </div>
+
       <div id="canvasStage" class="canvas-stage">
         <canvas id="annotationCanvas" aria-label="Image annotation canvas"></canvas>
         <div id="emptyState" class="empty-state">
           <span class="empty-kicker">Start here</span>
           <h2>Load a folder of coral images</h2>
-          <p>Images stay on this computer. Paint only areas you can classify confidently; boundaries can remain blank.</p>
+          <p>Images stay on this computer. Start a 50-dot count or switch to optional scribble annotation.</p>
           <div id="folderDropZone" class="folder-drop-zone">
             <strong>Drag the dataset folder here</strong>
             <span>or</span>
@@ -151,13 +191,27 @@
           <strong id="reviewState">Not loaded</strong>
           <span id="imagePosition">0 / 0</span>
         </div>
-        <div class="class-count-grid">
+        <div class="class-count-grid" data-mode-panel="scribble">
           <div><span class="count-dot rubble"></span><strong id="rubbleCount">0</strong><small>rubble strokes</small></div>
           <div><span class="count-dot sediment"></span><strong id="sedimentCount">0</strong><small>sediment strokes</small></div>
           <div><span class="count-dot unsure"></span><strong id="unsureCount">0</strong><small>unsure strokes</small></div>
         </div>
-        <button id="reviewNextButton" class="button button-primary review-button" type="button" disabled>Mark reviewed + next</button>
-        <p class="review-note">An image can be reviewed with no strokes if it contains no useful rubble or sediment examples.</p>
+        <div class="dot-review-summary" data-mode-panel="dot">
+          <div class="dot-total-line">
+            <strong id="dotProgressCount">0 / 50</strong>
+            <span id="dotEligibilityText">Not started</span>
+          </div>
+          <div class="dot-progress-track"><span id="dotProgressBar"></span></div>
+          <div class="dot-count-grid">
+            <div><span class="count-dot live"></span><strong id="dotLiveCount">0</strong><small>live</small></div>
+            <div><span class="count-dot dsc"></span><strong id="dotDscCount">0</strong><small>DSC</small></div>
+            <div><span class="count-dot rubble"></span><strong id="dotRubbleCount">0</strong><small>rubble</small></div>
+            <div><span class="count-dot sediment"></span><strong id="dotSedimentCount">0</strong><small>sediment</small></div>
+            <div><span class="count-dot unknown-other"></span><strong id="dotUnknownCount">0</strong><small>unknown</small></div>
+          </div>
+        </div>
+        <button id="reviewNextButton" class="button button-primary review-button" data-mode-panel="scribble" type="button" disabled>Mark reviewed + next</button>
+        <p class="review-note" data-mode-panel="scribble">An image can be reviewed with no strokes if it contains no useful rubble or sediment examples.</p>
       </section>
 
       <section class="review-card">
@@ -165,7 +219,7 @@
         <textarea id="imageNotes" rows="4" placeholder="Optional: why this image is difficult" disabled></textarea>
       </section>
 
-      <section class="review-card guidance-card">
+      <section class="review-card guidance-card" data-mode-panel="scribble">
         <span class="eyebrow">Good annotations</span>
         <ol>
           <li>Paint interiors, not boundaries.</li>
@@ -177,11 +231,17 @@
 
       <section class="review-card navigation-card">
         <span class="eyebrow">Navigate</span>
-        <dl>
+        <dl data-mode-panel="scribble">
           <div><dt>Pan</dt><dd>Space + drag</dd></div>
           <div><dt>Zoom</dt><dd>Mouse wheel</dd></div>
           <div><dt>Images</dt><dd>&larr; / &rarr;</dd></div>
           <div><dt>Review + next</dt><dd>Enter</dd></div>
+        </dl>
+        <dl data-mode-panel="dot">
+          <div><dt>Classify</dt><dd>L / D / R / S / U</dd></div>
+          <div><dt>Undo / redo</dt><dd>Ctrl+Z / Shift+Ctrl+Z</dd></div>
+          <div><dt>Next completed image</dt><dd>Enter</dd></div>
+          <div><dt>Images</dt><dd>&larr; / &rarr;</dd></div>
         </dl>
       </section>
     </aside>
@@ -197,16 +257,18 @@
         <button class="icon-button" value="close" aria-label="Close help">&#215;</button>
       </div>
       <div class="shortcut-grid">
-        <div><kbd>R</kbd><span>Rubble brush</span></div>
-        <div><kbd>S</kbd><span>Sediment brush</span></div>
-        <div><kbd>U</kbd><span>Unsure brush</span></div>
+        <div><kbd>L</kbd><span>Live dot</span></div>
+        <div><kbd>D</kbd><span>DSC dot</span></div>
+        <div><kbd>R</kbd><span>Rubble dot / brush</span></div>
+        <div><kbd>S</kbd><span>Sediment dot / brush</span></div>
+        <div><kbd>U</kbd><span>Unknown dot / unsure brush</span></div>
         <div><kbd>E</kbd><span>Stroke eraser</span></div>
         <div><kbd>[</kbd> <kbd>]</kbd><span>Change brush size</span></div>
         <div><kbd>F</kbd><span>Fit image</span></div>
         <div><kbd>O</kbd><span>Toggle overlay</span></div>
         <div><kbd>Ctrl</kbd> + <kbd>Z</kbd><span>Undo</span></div>
         <div><kbd>&larr;</kbd> <kbd>&rarr;</kbd><span>Previous / next image</span></div>
-        <div><kbd>Enter</kbd><span>Mark reviewed and continue</span></div>
+        <div><kbd>Enter</kbd><span>Continue to next image</span></div>
         <div><kbd>Space</kbd> + drag<span>Pan image</span></div>
         <div><span class="wheel-symbol">wheel</span><span>Zoom under pointer</span></div>
       </div>

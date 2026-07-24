@@ -1,7 +1,7 @@
 # Coral Scribbler
 
-Coral Scribbler is a focused browser tool for collecting sparse expert labels
-that distinguish coral rubble from sediment in underwater images.
+Coral Scribbler is a focused browser tool for rapid 50-dot coral cover counts
+and optional sparse rubble/sediment annotations in underwater images.
 
 **Open the app:** https://john-allard.github.io/coral-scribbler/
 
@@ -16,9 +16,11 @@ uploaded to GitHub or any other server.
    folder**. Chrome may label the folder permission **Upload** even though the
    app reads the files locally and does not send them over the network. If
    folder selection is unavailable, choose **Choose individual image files**.
-4. Paint short, confident strokes inside rubble or sediment regions. Leave
-   boundaries and unrelated classes unpainted.
-5. Mark each completed image as reviewed.
+4. For each highlighted query dot, press `L`, `D`, `R`, `S`, or `U` to classify
+   it as Live, DSC, Rubble, Sediment, or Unknown / other. The next dot appears
+   immediately.
+5. After all 50 dots are classified, press `Enter` to continue to the next
+   image. Undo and redo remain available.
 6. Select **Export CSV** before closing or changing computers, then send that
    CSV file to the project team.
 
@@ -29,18 +31,25 @@ durable research record.
 To continue an exported session, select the same folder or files and then use
 **Import CSV**.
 
-## Labels
+## Dot Counts
 
-| Label | Meaning | Training value |
+| Label | Hotkey | Stored value |
 | --- | --- | ---: |
-| Rubble | Dead coral that is no longer standing | `1` |
-| Sediment | Unconsolidated substrate | `2` |
-| Unsure | A recorded ambiguity, excluded from supervised training | none |
-| Unpainted | Unlabeled, not background and not sediment | `0` / ignore |
+| Live | `L` | `0` |
+| DSC | `D` | `1` |
+| Rubble | `R` | `2` |
+| Sediment | `S` | `3` |
+| Unknown / other | `U` | `4` |
 
-Coordinates and brush diameters are stored in original-image pixels, so zooming
-does not change the labels. See [docs/annotation-format.md](docs/annotation-format.md)
-for the export format.
+The CSV reports percentages over the whole image and percentages over usable
+area after removing Unknown / other. Completed images with more than 50%
+Unknown / other are excluded from dataset cover summaries; exactly 50% remains
+included.
+
+Optional **Scribble** mode remains available for collecting spatial
+rubble/sediment examples. Dot coordinates, stroke coordinates, and brush
+diameters use original-image pixels, so zooming does not change labels. See
+[docs/annotation-format.md](docs/annotation-format.md) for the export format.
 
 ## Privacy and Deployment
 
