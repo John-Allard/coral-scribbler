@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  DEFAULT_DOT_MARKER_DIAMETER_PX,
   DOTS_PER_IMAGE,
   LEGACY_SCHEMA_VERSION,
   SCHEMA_VERSION,
@@ -10,6 +11,8 @@ import {
   ensureDotQueries,
   ensureImage,
   imageDotSummary,
+  normalizeDotHotkey,
+  normalizeDotHotkeys,
   normalizeSession,
   sessionDotSummary,
   sessionFromCsv,
@@ -71,9 +74,38 @@ test("new sessions default to 50 uniformly sampled dot queries", () => {
     return value;
   });
   assert.equal(session.annotation_mode, "dot");
+  assert.equal(session.dot_marker_diameter_px, DEFAULT_DOT_MARKER_DIAMETER_PX);
+  assert.deepEqual(session.dot_hotkeys, {
+    live: "l",
+    dsc: "d",
+    rubble: "r",
+    sediment: "s",
+    unknown_other: "u",
+  });
   assert.equal(dots.length, 50);
   assert.equal(new Set(dots.map((dot) => dot.index)).size, 50);
   assert.ok(dots.every((dot) => dot.x >= 0 && dot.x < 200 && dot.y >= 0 && dot.y < 100));
+});
+
+test("custom dot hotkeys are single, unique letters or numbers", () => {
+  assert.equal(normalizeDotHotkey(" Q "), "q");
+  assert.equal(normalizeDotHotkey("Shift"), null);
+  assert.equal(normalizeDotHotkey("?"), null);
+  assert.deepEqual(normalizeDotHotkeys({
+    live: "q",
+    dsc: "w",
+    rubble: "e",
+    sediment: "r",
+    unknown_other: "f",
+  }), {
+    live: "q",
+    dsc: "w",
+    rubble: "e",
+    sediment: "r",
+    unknown_other: "f",
+  });
+  const duplicateFallback = normalizeDotHotkeys({ live: "q", dsc: "q" });
+  assert.equal(new Set(Object.values(duplicateFallback)).size, 5);
 });
 
 test("dot summaries apply the strict over-50-percent unknown exclusion", () => {
@@ -119,6 +151,14 @@ test("dot summaries apply the strict over-50-percent unknown exclusion", () => {
 test("CSV round-trip preserves metadata and exact stroke geometry", () => {
   const session = createSession("Gulf, pilot");
   session.annotator = "=unsafe spreadsheet text";
+  session.dot_marker_diameter_px = 28;
+  session.dot_hotkeys = {
+    live: "q",
+    dsc: "w",
+    rubble: "e",
+    sediment: "r",
+    unknown_other: "f",
+  };
   const image = ensureImage(session, {
     relative_path: "frame,001.png",
     name: "frame,001.png",
@@ -149,6 +189,8 @@ test("CSV round-trip preserves metadata and exact stroke geometry", () => {
   const restored = sessionFromCsv(csv);
   const restoredImage = restored.images["frame,001.png"];
   assert.equal(restored.annotator, "=unsafe spreadsheet text");
+  assert.equal(restored.dot_marker_diameter_px, 28);
+  assert.deepEqual(restored.dot_hotkeys, session.dot_hotkeys);
   assert.equal(restoredImage.notes, image.notes);
   assert.equal(restoredImage.review_status, "reviewed");
   assert.equal(restoredImage.strokes[0].class_id, "sediment");

@@ -24,6 +24,11 @@ uploaded to GitHub or any other server.
 6. Select **Export CSV** before closing or changing computers, then send that
    CSV file to the project team.
 
+The **Dot diameter** slider changes the sampled disk in original-image pixels.
+The current dot is orange and classified dots use their class colors, but both
+use the same selected diameter. Class hotkeys can be replaced with any five
+unique letters or numbers; **Reset** restores `L/D/R/S/U`.
+
 The browser keeps a convenience autosave for the selected dataset, but that
 backup belongs to one browser profile on one device. Exported CSV is the
 durable research record.

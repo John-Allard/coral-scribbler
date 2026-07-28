@@ -58,6 +58,26 @@
         </div>
       </section>
 
+      <section class="panel-section dot-settings-section" data-mode-panel="dot">
+        <div class="section-heading">
+          <label for="dotSize">Dot diameter</label>
+          <output id="dotSizeValue" for="dotSize">12 px</output>
+        </div>
+        <input id="dotSize" type="range" min="4" max="48" step="2" value="12">
+        <p class="field-note">Current and classified dots use this same size in original-image pixels.</p>
+        <div class="hotkey-heading">
+          <strong>Class hotkeys</strong>
+          <button id="resetDotHotkeysButton" class="mini-text-button" type="button">Reset</button>
+        </div>
+        <div class="hotkey-grid">
+          <label><span class="count-dot live"></span><span>Live</span><input data-dot-hotkey-input="live" value="L" maxlength="1" inputmode="text" aria-label="Live hotkey"></label>
+          <label><span class="count-dot dsc"></span><span>DSC</span><input data-dot-hotkey-input="dsc" value="D" maxlength="1" inputmode="text" aria-label="DSC hotkey"></label>
+          <label><span class="count-dot rubble"></span><span>Rubble</span><input data-dot-hotkey-input="rubble" value="R" maxlength="1" inputmode="text" aria-label="Rubble hotkey"></label>
+          <label><span class="count-dot sediment"></span><span>Sediment</span><input data-dot-hotkey-input="sediment" value="S" maxlength="1" inputmode="text" aria-label="Sediment hotkey"></label>
+          <label><span class="count-dot unknown-other"></span><span>Unknown</span><input data-dot-hotkey-input="unknown_other" value="U" maxlength="1" inputmode="text" aria-label="Unknown or other hotkey"></label>
+        </div>
+      </section>
+
       <section class="panel-section" data-mode-panel="scribble">
         <div class="section-heading">
           <span>Paint</span>
@@ -132,19 +152,19 @@
         </div>
         <div class="dot-class-buttons" role="group" aria-label="Classify current dot">
           <button class="dot-class-button live" data-dot-class="live" type="button" disabled>
-            <span class="dot-button-swatch"></span><strong>Live</strong><kbd>L</kbd>
+            <span class="dot-button-swatch"></span><strong>Live</strong><kbd data-dot-hotkey-display="live">L</kbd>
           </button>
           <button class="dot-class-button dsc" data-dot-class="dsc" type="button" disabled>
-            <span class="dot-button-swatch"></span><strong>DSC</strong><kbd>D</kbd>
+            <span class="dot-button-swatch"></span><strong>DSC</strong><kbd data-dot-hotkey-display="dsc">D</kbd>
           </button>
           <button class="dot-class-button rubble" data-dot-class="rubble" type="button" disabled>
-            <span class="dot-button-swatch"></span><strong>Rubble</strong><kbd>R</kbd>
+            <span class="dot-button-swatch"></span><strong>Rubble</strong><kbd data-dot-hotkey-display="rubble">R</kbd>
           </button>
           <button class="dot-class-button sediment" data-dot-class="sediment" type="button" disabled>
-            <span class="dot-button-swatch"></span><strong>Sediment</strong><kbd>S</kbd>
+            <span class="dot-button-swatch"></span><strong>Sediment</strong><kbd data-dot-hotkey-display="sediment">S</kbd>
           </button>
           <button class="dot-class-button unknown-other" data-dot-class="unknown_other" type="button" disabled>
-            <span class="dot-button-swatch"></span><strong>Unknown / other</strong><kbd>U</kbd>
+            <span class="dot-button-swatch"></span><strong>Unknown / other</strong><kbd data-dot-hotkey-display="unknown_other">U</kbd>
           </button>
         </div>
       </div>
@@ -238,7 +258,7 @@
           <div><dt>Review + next</dt><dd>Enter</dd></div>
         </dl>
         <dl data-mode-panel="dot">
-          <div><dt>Classify</dt><dd>L / D / R / S / U</dd></div>
+          <div><dt>Classify</dt><dd id="dotHotkeyReference">L / D / R / S / U</dd></div>
           <div><dt>Undo / redo</dt><dd>Ctrl+Z / Shift+Ctrl+Z</dd></div>
           <div><dt>Next completed image</dt><dd>Enter</dd></div>
           <div><dt>Images</dt><dd>&larr; / &rarr;</dd></div>
@@ -257,13 +277,16 @@
         <button class="icon-button" value="close" aria-label="Close help">&#215;</button>
       </div>
       <div class="shortcut-grid">
-        <div><kbd>L</kbd><span>Live dot</span></div>
-        <div><kbd>D</kbd><span>DSC dot</span></div>
-        <div><kbd>R</kbd><span>Rubble dot / brush</span></div>
-        <div><kbd>S</kbd><span>Sediment dot / brush</span></div>
-        <div><kbd>U</kbd><span>Unknown dot / unsure brush</span></div>
-        <div><kbd>E</kbd><span>Stroke eraser</span></div>
-        <div><kbd>[</kbd> <kbd>]</kbd><span>Change brush size</span></div>
+        <div data-mode-panel="dot"><kbd data-dot-hotkey-display="live">L</kbd><span>Live dot</span></div>
+        <div data-mode-panel="dot"><kbd data-dot-hotkey-display="dsc">D</kbd><span>DSC dot</span></div>
+        <div data-mode-panel="dot"><kbd data-dot-hotkey-display="rubble">R</kbd><span>Rubble dot</span></div>
+        <div data-mode-panel="dot"><kbd data-dot-hotkey-display="sediment">S</kbd><span>Sediment dot</span></div>
+        <div data-mode-panel="dot"><kbd data-dot-hotkey-display="unknown_other">U</kbd><span>Unknown / other dot</span></div>
+        <div data-mode-panel="scribble"><kbd>R</kbd><span>Rubble brush</span></div>
+        <div data-mode-panel="scribble"><kbd>S</kbd><span>Sediment brush</span></div>
+        <div data-mode-panel="scribble"><kbd>U</kbd><span>Unsure brush</span></div>
+        <div data-mode-panel="scribble"><kbd>E</kbd><span>Stroke eraser</span></div>
+        <div data-mode-panel="scribble"><kbd>[</kbd> <kbd>]</kbd><span>Change brush size</span></div>
         <div><kbd>F</kbd><span>Fit image</span></div>
         <div><kbd>O</kbd><span>Toggle overlay</span></div>
         <div><kbd>Ctrl</kbd> + <kbd>Z</kbd><span>Undo</span></div>

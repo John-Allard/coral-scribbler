@@ -486,9 +486,65 @@ kbd,
   line-height: 1;
 }
 
-.brush-section input[type="range"] {
+.brush-section input[type="range"],
+.dot-settings-section input[type="range"] {
   width: 100%;
   accent-color: var(--coral);
+}
+
+.hotkey-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 16px 0 8px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mini-text-button {
+  padding: 3px 0;
+  color: var(--coral-dark);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 750;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.hotkey-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.hotkey-grid label {
+  display: grid;
+  grid-template-columns: 8px minmax(0, 1fr) 32px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  color: #43504c;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hotkey-grid .count-dot {
+  margin: 0;
+}
+
+.hotkey-grid input {
+  width: 32px;
+  height: 30px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--ink);
+  background: #fffdf8;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
+  text-transform: uppercase;
 }
 
 .image-queue-section {
@@ -499,7 +555,8 @@ kbd,
 }
 
 body[data-annotation-mode="dot"] .image-queue-section {
-  height: calc(100% - 224px);
+  min-height: 180px;
+  height: calc(100% - 500px);
 }
 
 .search-input {
@@ -1302,6 +1359,7 @@ body[data-annotation-mode="dot"] #annotationCanvas {
   .app-shell {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto minmax(70vh, 1fr);
+    width: 100%;
     min-height: 100vh;
     height: auto;
   }
@@ -1337,6 +1395,14 @@ body[data-annotation-mode="dot"] #annotationCanvas {
 
   .image-queue-section {
     display: none;
+  }
+
+  .dot-settings-section {
+    grid-column: 1 / -1;
+  }
+
+  .hotkey-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
   }
 
   .workspace {
@@ -1397,6 +1463,14 @@ body[data-annotation-mode="dot"] #annotationCanvas {
 @media (max-width: 520px) {
   .tool-panel {
     grid-template-columns: 1fr;
+  }
+
+  .dot-settings-section {
+    grid-column: auto;
+  }
+
+  .hotkey-grid {
+    grid-template-columns: 1fr 1fr;
   }
 
   .canvas-toolbar .toolbar-button kbd {

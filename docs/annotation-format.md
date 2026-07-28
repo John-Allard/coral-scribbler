@@ -44,7 +44,7 @@ self-contained. Important columns include:
 
 | Scope | Columns |
 | --- | --- |
-| Session | `schema_version`, `session_id`, `dataset_name`, `annotator`, `annotation_mode`, `session_dot_target_count`, timestamps |
+| Session | `schema_version`, `session_id`, `dataset_name`, `annotator`, `annotation_mode`, `session_dot_target_count`, `session_dot_marker_diameter_px`, five `session_hotkey_*` fields, timestamps |
 | Image | path, name, dimensions, file metadata, review state, notes, dot counts, image and usable-area percentages |
 | Dot | `dot_id`, `dot_index`, `dot_x`, `dot_y`, `dot_class_id`, `dot_training_value`, `dot_classified_at_utc` |
 | Stroke | `stroke_id`, `class_id`, `training_value`, `brush_diameter_px`, `stroke_created_at_utc` |
@@ -61,3 +61,7 @@ Valid review states are `unreviewed`, `in_progress`, and `reviewed`. In dot
 mode, completing all target dots sets the image to reviewed. In scribble mode,
 an image may be reviewed with no strokes when it contains no useful rubble or
 sediment examples.
+
+Dot marker diameter and hotkey assignments are interface settings retained for
+method provenance and consistent session resumption. They do not alter stored
+dot-center coordinates or calculated cover.

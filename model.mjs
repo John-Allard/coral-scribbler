@@ -1,6 +1,9 @@
 export const SCHEMA_VERSION = "coral-annotations/v2";
 export const LEGACY_SCHEMA_VERSION = "coral-scribbles/v1";
 export const DOTS_PER_IMAGE = 50;
+export const DEFAULT_DOT_MARKER_DIAMETER_PX = 12;
+export const MIN_DOT_MARKER_DIAMETER_PX = 4;
+export const MAX_DOT_MARKER_DIAMETER_PX = 48;
 
 export const CLASS_DEFINITIONS = Object.freeze([
   Object.freeze({ id: "rubble", name: "Rubble", training_value: 1, color: "#26966d" }),
@@ -27,6 +30,7 @@ const DOT_CLASS_IDS = new Set(DOT_CLASS_DEFINITIONS.map((item) => item.id));
 const SUPPORTED_SCHEMA_VERSIONS = new Set([SCHEMA_VERSION, LEGACY_SCHEMA_VERSION]);
 const ANNOTATION_MODES = new Set(["dot", "scribble"]);
 const REVIEW_STATES = new Set(["unreviewed", "in_progress", "reviewed"]);
+const HOTKEY_FALLBACKS = "ldrsuqwertyuiopasdfghjkzxcvbnm1234567890";
 
 function utcNow() {
   return new Date().toISOString();
@@ -47,8 +51,28 @@ export function naturalCompare(left, right) {
   });
 }
 
+export function normalizeDotHotkey(value) {
+  const key = String(value || "").trim().toLocaleLowerCase();
+  return /^[a-z0-9]$/.test(key) ? key : null;
+}
+
+export function normalizeDotHotkeys(rawHotkeys = {}) {
+  const normalized = {};
+  const used = new Set();
+  for (const definition of DOT_CLASS_DEFINITIONS) {
+    const requested = normalizeDotHotkey(rawHotkeys?.[definition.id]);
+    const defaultKey = definition.hotkey.toLocaleLowerCase();
+    const key = [requested, defaultKey, ...HOTKEY_FALLBACKS]
+      .find((candidate) => candidate && !used.has(candidate));
+    normalized[definition.id] = key;
+    used.add(key);
+  }
+  return normalized;
+}
+
 export function createSession(datasetName = "Untitled dataset") {
   const now = utcNow();
+  const dotHotkeys = normalizeDotHotkeys();
   return {
     schema_version: SCHEMA_VERSION,
     session_id: randomId("session"),
@@ -56,10 +80,15 @@ export function createSession(datasetName = "Untitled dataset") {
     annotator: "",
     annotation_mode: "dot",
     dot_target_count: DOTS_PER_IMAGE,
+    dot_marker_diameter_px: DEFAULT_DOT_MARKER_DIAMETER_PX,
+    dot_hotkeys: dotHotkeys,
     created_at_utc: now,
     updated_at_utc: now,
     classes: CLASS_DEFINITIONS.map((item) => ({ ...item })),
-    dot_classes: DOT_CLASS_DEFINITIONS.map((item) => ({ ...item })),
+    dot_classes: DOT_CLASS_DEFINITIONS.map((item) => ({
+      ...item,
+      hotkey: dotHotkeys[item.id].toLocaleUpperCase(),
+    })),
     images: {},
   };
 }
@@ -169,6 +198,21 @@ export function normalizeSession(rawDocument) {
     1,
     Math.round(finiteNumber(rawDocument.dot_target_count, DOTS_PER_IMAGE)),
   );
+  session.dot_marker_diameter_px = Math.max(
+    MIN_DOT_MARKER_DIAMETER_PX,
+    Math.min(
+      MAX_DOT_MARKER_DIAMETER_PX,
+      Math.round(finiteNumber(
+        rawDocument.dot_marker_diameter_px,
+        DEFAULT_DOT_MARKER_DIAMETER_PX,
+      )),
+    ),
+  );
+  session.dot_hotkeys = normalizeDotHotkeys(rawDocument.dot_hotkeys);
+  session.dot_classes = DOT_CLASS_DEFINITIONS.map((item) => ({
+    ...item,
+    hotkey: session.dot_hotkeys[item.id].toLocaleUpperCase(),
+  }));
   session.created_at_utc = String(rawDocument.created_at_utc || session.created_at_utc);
   session.updated_at_utc = String(rawDocument.updated_at_utc || session.updated_at_utc);
   session.images = {};
@@ -427,6 +471,12 @@ export function sessionToCsv(session) {
     "annotator",
     "annotation_mode",
     "session_dot_target_count",
+    "session_dot_marker_diameter_px",
+    "session_hotkey_live",
+    "session_hotkey_dsc",
+    "session_hotkey_rubble",
+    "session_hotkey_sediment",
+    "session_hotkey_unknown_other",
     "session_created_at_utc",
     "session_updated_at_utc",
     "image_relative_path",
@@ -499,6 +549,12 @@ export function sessionToCsv(session) {
     annotator: document.annotator,
     annotation_mode: document.annotation_mode,
     session_dot_target_count: document.dot_target_count,
+    session_dot_marker_diameter_px: document.dot_marker_diameter_px,
+    session_hotkey_live: document.dot_hotkeys.live,
+    session_hotkey_dsc: document.dot_hotkeys.dsc,
+    session_hotkey_rubble: document.dot_hotkeys.rubble,
+    session_hotkey_sediment: document.dot_hotkeys.sediment,
+    session_hotkey_unknown_other: document.dot_hotkeys.unknown_other,
     session_created_at_utc: document.created_at_utc,
     session_updated_at_utc: document.updated_at_utc,
   };
@@ -736,6 +792,28 @@ export function sessionFromCsv(csvText) {
           DOTS_PER_IMAGE,
         )),
       );
+      session.dot_marker_diameter_px = Math.max(
+        MIN_DOT_MARKER_DIAMETER_PX,
+        Math.min(
+          MAX_DOT_MARKER_DIAMETER_PX,
+          Math.round(csvNumber(
+            valueAt(row, "session_dot_marker_diameter_px"),
+            "session_dot_marker_diameter_px",
+            DEFAULT_DOT_MARKER_DIAMETER_PX,
+          )),
+        ),
+      );
+      session.dot_hotkeys = normalizeDotHotkeys({
+        live: valueAt(row, "session_hotkey_live"),
+        dsc: valueAt(row, "session_hotkey_dsc"),
+        rubble: valueAt(row, "session_hotkey_rubble"),
+        sediment: valueAt(row, "session_hotkey_sediment"),
+        unknown_other: valueAt(row, "session_hotkey_unknown_other"),
+      });
+      session.dot_classes = DOT_CLASS_DEFINITIONS.map((item) => ({
+        ...item,
+        hotkey: session.dot_hotkeys[item.id].toLocaleUpperCase(),
+      }));
       session.created_at_utc = valueAt(row, "session_created_at_utc") || session.created_at_utc;
       session.updated_at_utc = valueAt(row, "session_updated_at_utc") || session.updated_at_utc;
     }

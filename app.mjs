@@ -1,7 +1,10 @@
 import {
   CLASS_DEFINITIONS,
+  DEFAULT_DOT_MARKER_DIAMETER_PX,
   DOT_CLASS_DEFINITIONS,
   DOTS_PER_IMAGE,
+  MAX_DOT_MARKER_DIAMETER_PX,
+  MIN_DOT_MARKER_DIAMETER_PX,
   createSession,
   documentForExport,
   ensureImage,
@@ -9,6 +12,8 @@ import {
   imageDotSummary,
   imageStrokeCounts,
   naturalCompare,
+  normalizeDotHotkey,
+  normalizeDotHotkeys,
   normalizeSession,
   randomId,
   sessionDotSummary,
@@ -41,6 +46,10 @@ const elements = {
   helpButton: $("helpButton"),
   helpDialog: $("helpDialog"),
   annotatorInput: $("annotatorInput"),
+  dotSize: $("dotSize"),
+  dotSizeValue: $("dotSizeValue"),
+  resetDotHotkeysButton: $("resetDotHotkeysButton"),
+  dotHotkeyReference: $("dotHotkeyReference"),
   brushSize: $("brushSize"),
   brushValue: $("brushValue"),
   imageSearch: $("imageSearch"),
@@ -338,6 +347,85 @@ function classifyActiveDot(classId) {
   }
 }
 
+function updateDotSettingsInterface() {
+  const diameter = state.session.dot_marker_diameter_px || DEFAULT_DOT_MARKER_DIAMETER_PX;
+  state.session.dot_hotkeys = normalizeDotHotkeys(state.session.dot_hotkeys);
+  elements.dotSize.value = String(diameter);
+  elements.dotSizeValue.textContent = `${diameter} px`;
+  for (const definition of DOT_CLASS_DEFINITIONS) {
+    const key = state.session.dot_hotkeys[definition.id].toLocaleUpperCase();
+    document.querySelectorAll(`[data-dot-hotkey-display="${definition.id}"]`).forEach((element) => {
+      element.textContent = key;
+    });
+    const input = document.querySelector(`[data-dot-hotkey-input="${definition.id}"]`);
+    if (input && document.activeElement !== input) {
+      input.value = key;
+    }
+  }
+  elements.dotHotkeyReference.textContent = DOT_CLASS_DEFINITIONS
+    .map(({ id }) => state.session.dot_hotkeys[id].toLocaleUpperCase())
+    .join(" / ");
+}
+
+function setDotMarkerDiameter(value) {
+  state.session.dot_marker_diameter_px = Math.max(
+    MIN_DOT_MARKER_DIAMETER_PX,
+    Math.min(MAX_DOT_MARKER_DIAMETER_PX, Math.round(Number(value) || DEFAULT_DOT_MARKER_DIAMETER_PX)),
+  );
+  updateDotSettingsInterface();
+  if (state.descriptors.length) {
+    scheduleSave();
+  }
+  render();
+}
+
+function setDotHotkey(classId, rawValue) {
+  if (!dotClassById[classId]) {
+    return;
+  }
+  const key = normalizeDotHotkey(rawValue);
+  if (!key) {
+    showToast("Choose one letter or number for each class.");
+    updateDotSettingsInterface();
+    const input = document.querySelector(`[data-dot-hotkey-input="${classId}"]`);
+    input.value = state.session.dot_hotkeys[classId].toLocaleUpperCase();
+    input.select();
+    return;
+  }
+  const conflict = Object.entries(state.session.dot_hotkeys)
+    .find(([otherClassId, otherKey]) => otherClassId !== classId && otherKey === key);
+  if (conflict) {
+    showToast(`${key.toLocaleUpperCase()} is already assigned to ${dotClassById[conflict[0]].name}.`);
+    updateDotSettingsInterface();
+    const input = document.querySelector(`[data-dot-hotkey-input="${classId}"]`);
+    input.value = state.session.dot_hotkeys[classId].toLocaleUpperCase();
+    input.select();
+    return;
+  }
+  state.session.dot_hotkeys[classId] = key;
+  const definition = state.session.dot_classes.find((item) => item.id === classId);
+  if (definition) {
+    definition.hotkey = key.toLocaleUpperCase();
+  }
+  updateDotSettingsInterface();
+  if (state.descriptors.length) {
+    scheduleSave();
+  }
+}
+
+function resetDotHotkeys() {
+  state.session.dot_hotkeys = normalizeDotHotkeys();
+  state.session.dot_classes = DOT_CLASS_DEFINITIONS.map((item) => ({
+    ...item,
+    hotkey: state.session.dot_hotkeys[item.id].toLocaleUpperCase(),
+  }));
+  updateDotSettingsInterface();
+  if (state.descriptors.length) {
+    scheduleSave();
+  }
+  showToast("Dot hotkeys reset to L / D / R / S / U.");
+}
+
 function setBrushDiameter(value) {
   state.brushDiameter = Math.max(4, Math.min(96, Number(value) || 24));
   elements.brushSize.value = String(state.brushDiameter);
@@ -379,6 +467,7 @@ function updateInterface() {
   elements.emptyState.hidden = hasImages;
   elements.datasetName.textContent = hasImages ? state.session.dataset_name : "No folder loaded";
   elements.annotatorInput.value = state.session.annotator || "";
+  updateDotSettingsInterface();
 
   const paths = descriptorPaths();
   const summary = summarizeSession(state.session, paths);
@@ -859,38 +948,22 @@ function drawStroke(stroke, alpha = state.overlayOpacity) {
 
 function drawDotMarker(dot, isActive = false) {
   const [x, y] = imageToCanvas(dot.x, dot.y);
-  ctx.save();
-  if (isActive) {
-    ctx.shadowColor = "rgba(0, 0, 0, 0.9)";
-    ctx.shadowBlur = 6;
-    ctx.fillStyle = "#f6f2e7";
-    ctx.strokeStyle = "#d7503f";
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.arc(x, y, 10, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = "#d7503f";
-    ctx.beginPath();
-    ctx.arc(x, y, 3.5, 0, Math.PI * 2);
-    ctx.fill();
-  } else {
-    const definition = dotClassById[dot.class_id];
-    if (!definition) {
-      ctx.restore();
-      return;
-    }
-    ctx.shadowColor = "rgba(0, 0, 0, 0.75)";
-    ctx.shadowBlur = 3;
-    ctx.fillStyle = definition.color;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.94)";
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(x, y, 6, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+  const diameter = state.session.dot_marker_diameter_px || DEFAULT_DOT_MARKER_DIAMETER_PX;
+  const outerRadius = Math.max(1, diameter * state.view.scale / 2);
+  const lineWidth = Math.min(2, Math.max(1, outerRadius * 0.25));
+  const drawRadius = Math.max(0.5, outerRadius - lineWidth / 2);
+  const definition = isActive ? null : dotClassById[dot.class_id];
+  if (!isActive && !definition) {
+    return;
   }
+  ctx.save();
+  ctx.fillStyle = isActive ? "#ff6a3d" : definition.color;
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.96)";
+  ctx.lineWidth = lineWidth;
+  ctx.beginPath();
+  ctx.arc(x, y, drawRadius, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
   ctx.restore();
 }
 
@@ -1301,16 +1374,11 @@ function handleKeyDown(event) {
   }
   const key = event.key.toLocaleLowerCase();
   if (state.annotationMode === "dot") {
-    const dotKeys = {
-      l: "live",
-      d: "dsc",
-      r: "rubble",
-      s: "sediment",
-      u: "unknown_other",
-    };
-    if (dotKeys[key]) {
+    const dotClass = Object.entries(state.session.dot_hotkeys)
+      .find(([, hotkey]) => hotkey === key)?.[0];
+    if (dotClass) {
       event.preventDefault();
-      classifyActiveDot(dotKeys[key]);
+      classifyActiveDot(dotClass);
       return;
     }
   }
@@ -1345,6 +1413,13 @@ function wireEvents() {
   });
   document.querySelectorAll("[data-dot-class]").forEach((button) => {
     button.addEventListener("click", () => classifyActiveDot(button.dataset.dotClass));
+  });
+  elements.dotSize.addEventListener("input", () => setDotMarkerDiameter(elements.dotSize.value));
+  elements.resetDotHotkeysButton.addEventListener("click", resetDotHotkeys);
+  document.querySelectorAll("[data-dot-hotkey-input]").forEach((input) => {
+    input.addEventListener("focus", () => input.select());
+    input.addEventListener("click", () => input.select());
+    input.addEventListener("input", () => setDotHotkey(input.dataset.dotHotkeyInput, input.value));
   });
   document.querySelectorAll("[data-tool]").forEach((button) => {
     button.addEventListener("click", () => setTool(button.dataset.tool));
