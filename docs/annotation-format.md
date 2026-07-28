@@ -62,7 +62,7 @@ mode, completing all target dots sets the image to reviewed. In scribble mode,
 an image may be reviewed with no strokes when it contains no useful rubble or
 sediment examples.
 
-Dot marker fraction, animation preference, and hotkey assignments are interface
+Dot marker fraction, color-cycle preference, and hotkey assignments are interface
 settings retained for method provenance and consistent session resumption.
 `session_dot_marker_diameter_fraction` is relative to the image short edge;
 `session_dot_marker_diameter_px` is the equivalent diameter at a 720-pixel

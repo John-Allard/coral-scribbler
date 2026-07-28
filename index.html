@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#f2ede2">
   <title>Coral Scribbler</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23dc684d'/%3E%3Cpath d='M15 26V7m0 7-6-5m6 9 7-6' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css?v=20260728c">
 </head>
 <body data-annotation-mode="dot">
   <div class="app-shell">
@@ -65,10 +65,10 @@
         </div>
         <input id="dotSize" type="range" min="4" max="16" step="1" value="10">
         <p class="field-note">Range scales with image size. The inner ring shows the sampled footprint.</p>
-        <label class="animation-toggle">
-          <input id="animateCurrentDot" type="checkbox" checked>
-          <span>Pulse current-dot highlight</span>
-        </label>
+        <button id="animateCurrentDot" class="animation-toggle" type="button" role="checkbox" aria-checked="true">
+          <span class="checkbox-indicator" aria-hidden="true"></span>
+          <span>Cycle current-dot color</span>
+        </button>
         <div class="hotkey-heading">
           <strong>Class hotkeys</strong>
           <button id="resetDotHotkeysButton" class="mini-text-button" type="button">Reset</button>
@@ -304,6 +304,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.mjs"></script>
+  <script type="module" src="app.mjs?v=20260728c"></script>
 </body>
 </html>

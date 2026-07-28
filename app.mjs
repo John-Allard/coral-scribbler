@@ -25,12 +25,12 @@ import {
   sessionToCsv,
   storageKeyForDataset,
   summarizeSession,
-} from "./model.mjs";
+} from "./model.mjs?v=20260728c";
 import {
   describeDroppedSelection,
   describeFileSelection,
   isSupportedImageFile,
-} from "./file-selection.mjs";
+} from "./file-selection.mjs?v=20260728c";
 
 const $ = (id) => document.getElementById(id);
 
@@ -367,7 +367,10 @@ function updateDotSettingsInterface() {
   elements.dotSize.max = String(range.max);
   elements.dotSize.value = String(diameter);
   elements.dotSizeValue.textContent = `${diameter} px`;
-  elements.animateCurrentDot.checked = state.session.dot_marker_animation_enabled !== false;
+  elements.animateCurrentDot.setAttribute(
+    "aria-checked",
+    String(state.session.dot_marker_animation_enabled !== false),
+  );
   for (const definition of DOT_CLASS_DEFINITIONS) {
     const key = state.session.dot_hotkeys[definition.id].toLocaleUpperCase();
     document.querySelectorAll(`[data-dot-hotkey-display="${definition.id}"]`).forEach((element) => {
@@ -1001,29 +1004,21 @@ function drawDotMarker(dot, isActive = false, animationTime = performance.now())
   ctx.save();
   if (isActive) {
     const animated = state.session.dot_marker_animation_enabled !== false;
-    const pulse = animated ? (Math.sin(animationTime / 230) + 1) / 2 : 0.45;
-    const haloRadius = outerRadius + 4 + pulse * 5;
-    ctx.globalAlpha = 0.58 + pulse * 0.38;
-    ctx.strokeStyle = "#ffef4a";
-    ctx.lineWidth = 2.5;
-    ctx.shadowColor = "#ff5b2e";
-    ctx.shadowBlur = 7 + pulse * 5;
-    ctx.beginPath();
-    ctx.arc(x, y, haloRadius, 0, Math.PI * 2);
-    ctx.stroke();
-
-    // The hollow inner ring is the exact sampled footprint; the halo only identifies it.
+    const activeColor = animated
+      ? `hsl(${(animationTime / 8) % 360} 100% 68%)`
+      : "#ffffff";
     const footprintLineWidth = Math.min(2.5, Math.max(1.5, outerRadius * 0.28));
     const footprintRadius = Math.max(0.5, outerRadius - footprintLineWidth / 2);
-    ctx.globalAlpha = 1;
-    ctx.shadowBlur = 0;
+    // The hollow ring is the exact sampled footprint; only its color changes.
     ctx.strokeStyle = "rgba(8, 18, 17, 0.9)";
-    ctx.lineWidth = footprintLineWidth + 3;
+    ctx.lineWidth = footprintLineWidth + 1.5;
     ctx.beginPath();
     ctx.arc(x, y, footprintRadius, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.strokeStyle = "#ffffff";
+    ctx.strokeStyle = activeColor;
     ctx.lineWidth = footprintLineWidth;
+    ctx.shadowColor = activeColor;
+    ctx.shadowBlur = 3;
     ctx.beginPath();
     ctx.arc(x, y, footprintRadius, 0, Math.PI * 2);
     ctx.stroke();
@@ -1511,8 +1506,9 @@ function wireEvents() {
     button.addEventListener("click", () => classifyActiveDot(button.dataset.dotClass));
   });
   elements.dotSize.addEventListener("input", () => setDotMarkerDiameter(elements.dotSize.value));
-  elements.animateCurrentDot.addEventListener("change", () => {
-    setDotMarkerAnimation(elements.animateCurrentDot.checked);
+  elements.animateCurrentDot.addEventListener("click", (event) => {
+    const enabled = event.currentTarget.getAttribute("aria-checked") !== "true";
+    setDotMarkerAnimation(enabled);
   });
   elements.resetDotHotkeysButton.addEventListener("click", resetDotHotkeys);
   document.querySelectorAll("[data-dot-hotkey-input]").forEach((input) => {

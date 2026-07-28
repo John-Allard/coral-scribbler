@@ -25,9 +25,9 @@ uploaded to GitHub or any other server.
    CSV file to the project team.
 
 The **Dot diameter** slider scales to the current image dimensions. Its range
-is 4-16 pixels on the 1200x720 demo and proportionally larger on
-higher-resolution images. The current query has a transparent center, an exact
-footprint ring, and a bright pulsing halo; animation can be disabled. Class
+is 4-16 pixels on the 1200x720 demo and proportionally larger on larger images.
+The current query has a transparent center and an exact-footprint outline whose
+color cycles without changing size; color cycling can be disabled. Class
 hotkeys can be replaced with any five unique letters or numbers; **Reset**
 restores `L/D/R/S/U`.
 
