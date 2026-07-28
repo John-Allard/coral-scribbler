@@ -1316,15 +1316,38 @@ body[data-annotation-mode="dot"] #annotationCanvas {
 
 .shortcut-grid > div {
   display: grid;
-  grid-template-columns: 88px 1fr;
+  grid-template-columns: 104px minmax(0, 1fr);
   align-items: center;
+  column-gap: 11px;
   min-height: 32px;
   border-bottom: 1px solid #e2dcd1;
   font-size: 12px;
 }
 
+.shortcut-keys {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.shortcut-keys kbd,
+.shortcut-keys .wheel-symbol {
+  min-width: 34px;
+}
+
+.shortcut-keys .wide-key {
+  min-width: 48px;
+}
+
+.shortcut-keys .arrow-key {
+  width: 42px;
+}
+
 .shortcut-grid > div > span:last-child {
   color: var(--muted);
+  line-height: 1.25;
 }
 
 .toast {

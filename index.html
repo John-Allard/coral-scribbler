@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#f2ede2">
   <title>Coral Scribbler</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23dc684d'/%3E%3Cpath d='M15 26V7m0 7-6-5m6 9 7-6' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=20260728g">
+  <link rel="stylesheet" href="styles.css?v=20260728h">
 </head>
 <body data-annotation-mode="dot">
   <div class="app-shell">
@@ -288,23 +288,23 @@
         Class keys are customizable under <strong>Class hotkeys</strong> in the left panel.
       </p>
       <div class="shortcut-grid">
-        <div data-mode-panel="dot"><kbd data-dot-hotkey-display="live">L</kbd><span>Live dot</span></div>
-        <div data-mode-panel="dot"><kbd data-dot-hotkey-display="dsc">D</kbd><span>DSC dot</span></div>
-        <div data-mode-panel="dot"><kbd data-dot-hotkey-display="rubble">R</kbd><span>Rubble dot</span></div>
-        <div data-mode-panel="dot"><kbd data-dot-hotkey-display="sediment">S</kbd><span>Sediment dot</span></div>
-        <div data-mode-panel="dot"><kbd data-dot-hotkey-display="unknown_other">U</kbd><span>Unknown / other dot</span></div>
-        <div data-mode-panel="scribble"><kbd>R</kbd><span>Rubble brush</span></div>
-        <div data-mode-panel="scribble"><kbd>S</kbd><span>Sediment brush</span></div>
-        <div data-mode-panel="scribble"><kbd>U</kbd><span>Unsure brush</span></div>
-        <div data-mode-panel="scribble"><kbd>E</kbd><span>Stroke eraser</span></div>
-        <div data-mode-panel="scribble"><kbd>[</kbd> <kbd>]</kbd><span>Change brush size</span></div>
-        <div><kbd>F</kbd><span>Fit image</span></div>
-        <div><kbd>O</kbd><span>Toggle overlay</span></div>
-        <div><kbd>Ctrl</kbd> + <kbd>Z</kbd><span>Undo</span></div>
-        <div><kbd>&larr;</kbd> <kbd>&rarr;</kbd><span>Previous / next image</span></div>
-        <div><kbd>Enter</kbd><span>Continue to next image</span></div>
-        <div><kbd>Space</kbd> + drag<span>Pan image</span></div>
-        <div><span class="wheel-symbol">wheel</span><span>Zoom under pointer</span></div>
+        <div data-mode-panel="dot"><span class="shortcut-keys"><kbd data-dot-hotkey-display="live">L</kbd></span><span>Live dot</span></div>
+        <div data-mode-panel="dot"><span class="shortcut-keys"><kbd data-dot-hotkey-display="dsc">D</kbd></span><span>DSC dot</span></div>
+        <div data-mode-panel="dot"><span class="shortcut-keys"><kbd data-dot-hotkey-display="rubble">R</kbd></span><span>Rubble dot</span></div>
+        <div data-mode-panel="dot"><span class="shortcut-keys"><kbd data-dot-hotkey-display="sediment">S</kbd></span><span>Sediment dot</span></div>
+        <div data-mode-panel="dot"><span class="shortcut-keys"><kbd data-dot-hotkey-display="unknown_other">U</kbd></span><span>Unknown / other dot</span></div>
+        <div data-mode-panel="scribble"><span class="shortcut-keys"><kbd>R</kbd></span><span>Rubble brush</span></div>
+        <div data-mode-panel="scribble"><span class="shortcut-keys"><kbd>S</kbd></span><span>Sediment brush</span></div>
+        <div data-mode-panel="scribble"><span class="shortcut-keys"><kbd>U</kbd></span><span>Unsure brush</span></div>
+        <div data-mode-panel="scribble"><span class="shortcut-keys"><kbd>E</kbd></span><span>Stroke eraser</span></div>
+        <div data-mode-panel="scribble"><span class="shortcut-keys"><kbd>[</kbd><kbd>]</kbd></span><span>Change brush size</span></div>
+        <div><span class="shortcut-keys"><kbd>F</kbd></span><span>Fit image</span></div>
+        <div><span class="shortcut-keys"><kbd>O</kbd></span><span>Toggle overlay</span></div>
+        <div><span class="shortcut-keys"><kbd class="wide-key">Ctrl</kbd><span aria-hidden="true">+</span><kbd>Z</kbd></span><span>Undo</span></div>
+        <div><span class="shortcut-keys"><kbd class="arrow-key">&larr;</kbd><kbd class="arrow-key">&rarr;</kbd></span><span>Previous / next image</span></div>
+        <div><span class="shortcut-keys"><kbd class="wide-key">Enter</kbd></span><span>Continue to next image</span></div>
+        <div><span class="shortcut-keys"><kbd class="wide-key">Space</kbd><span aria-hidden="true">+</span><span>drag</span></span><span>Pan image</span></div>
+        <div><span class="shortcut-keys"><span class="wheel-symbol">wheel</span></span><span>Zoom under pointer</span></div>
       </div>
       <p class="dialog-footnote">The app stores source-image coordinates, not screen coordinates, so zooming does not change the labels.</p>
     </form>
