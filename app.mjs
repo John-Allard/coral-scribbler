@@ -25,12 +25,12 @@ import {
   sessionToCsv,
   storageKeyForDataset,
   summarizeSession,
-} from "./model.mjs?v=20260728d";
+} from "./model.mjs?v=20260728e";
 import {
   describeDroppedSelection,
   describeFileSelection,
   isSupportedImageFile,
-} from "./file-selection.mjs?v=20260728d";
+} from "./file-selection.mjs?v=20260728e";
 
 const $ = (id) => document.getElementById(id);
 
@@ -53,6 +53,7 @@ const elements = {
   dotSize: $("dotSize"),
   dotSizeValue: $("dotSizeValue"),
   animateCurrentDot: $("animateCurrentDot"),
+  solidCurrentDot: $("solidCurrentDot"),
   resetDotHotkeysButton: $("resetDotHotkeysButton"),
   dotHotkeyReference: $("dotHotkeyReference"),
   brushSize: $("brushSize"),
@@ -123,6 +124,8 @@ const state = {
   toastTimer: null,
   markerAnimationFramePending: false,
   lastMarkerAnimationAt: 0,
+  activeQueryIdentity: null,
+  activeQueryPulseStartedAt: 0,
   objectUrls: [],
 };
 
@@ -371,6 +374,10 @@ function updateDotSettingsInterface() {
     "aria-checked",
     String(state.session.dot_marker_animation_enabled !== false),
   );
+  elements.solidCurrentDot.setAttribute(
+    "aria-checked",
+    String(state.session.dot_marker_solid_enabled === true),
+  );
   for (const definition of DOT_CLASS_DEFINITIONS) {
     const key = state.session.dot_hotkeys[definition.id].toLocaleUpperCase();
     document.querySelectorAll(`[data-dot-hotkey-display="${definition.id}"]`).forEach((element) => {
@@ -414,6 +421,15 @@ function setDotMarkerDiameter(value) {
 
 function setDotMarkerAnimation(enabled) {
   state.session.dot_marker_animation_enabled = Boolean(enabled);
+  updateDotSettingsInterface();
+  if (state.descriptors.length) {
+    scheduleSave();
+  }
+  render();
+}
+
+function setDotMarkerSolid(enabled) {
+  state.session.dot_marker_solid_enabled = Boolean(enabled);
   updateDotSettingsInterface();
   if (state.descriptors.length) {
     scheduleSave();
@@ -668,6 +684,8 @@ async function setDataset(descriptors, datasetName, session, options = {}) {
   state.histories.clear();
   state.imageElement = null;
   state.currentIndex = -1;
+  state.activeQueryIdentity = null;
+  state.activeQueryPulseStartedAt = 0;
 
   for (const descriptor of state.descriptors) {
     ensureImage(state.session, descriptor);
@@ -994,7 +1012,7 @@ function drawStroke(stroke, alpha = state.overlayOpacity) {
   ctx.restore();
 }
 
-function drawDotMarker(dot, isActive = false, animationTime = performance.now()) {
+function drawDotMarker(dot, isActive = false, animationTime = performance.now(), pulseProgress = null) {
   const [x, y] = imageToCanvas(dot.x, dot.y);
   const record = currentRecord();
   const diameter = dotMarkerDiameterForImage(
@@ -1010,24 +1028,35 @@ function drawDotMarker(dot, isActive = false, animationTime = performance.now())
   ctx.save();
   if (isActive) {
     const animated = state.session.dot_marker_animation_enabled !== false;
-    const activeColor = animated
-      ? `hsl(${(animationTime / 8) % 360} 100% 68%)`
-      : "#ffffff";
+    const whitePhase = Math.floor(animationTime / 450) % 2 === 0;
+    const activeColor = !animated || whitePhase ? "#ffffff" : "#000000";
+    const solid = state.session.dot_marker_solid_enabled === true;
     const footprintLineWidth = Math.min(2.5, Math.max(1.5, outerRadius * 0.28));
     const footprintRadius = Math.max(0.5, outerRadius - footprintLineWidth / 2);
-    // The hollow ring is the exact sampled footprint; only its color changes.
-    ctx.strokeStyle = "rgba(8, 18, 17, 0.9)";
-    ctx.lineWidth = footprintLineWidth + 1.5;
     ctx.beginPath();
     ctx.arc(x, y, footprintRadius, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.strokeStyle = activeColor;
-    ctx.lineWidth = footprintLineWidth;
-    ctx.shadowColor = activeColor;
-    ctx.shadowBlur = 3;
-    ctx.beginPath();
-    ctx.arc(x, y, footprintRadius, 0, Math.PI * 2);
-    ctx.stroke();
+    if (solid) {
+      ctx.fillStyle = activeColor;
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = activeColor;
+      ctx.lineWidth = footprintLineWidth;
+      ctx.stroke();
+    }
+    if (pulseProgress !== null && pulseProgress < 1) {
+      const pulseRadius = outerRadius + 2 + pulseProgress * 7;
+      ctx.globalAlpha = Math.max(0, 1 - pulseProgress);
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = "#000000";
+      ctx.beginPath();
+      ctx.arc(x, y, pulseRadius, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#ffffff";
+      ctx.beginPath();
+      ctx.arc(x, y, pulseRadius, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   } else {
     const lineWidth = Math.min(2, Math.max(1, outerRadius * 0.25));
     const drawRadius = Math.max(0.5, outerRadius - lineWidth / 2);
@@ -1043,10 +1072,14 @@ function drawDotMarker(dot, isActive = false, animationTime = performance.now())
 }
 
 function scheduleMarkerAnimation() {
+  const pulseActive = (
+    state.activeQueryPulseStartedAt > 0
+    && performance.now() - state.activeQueryPulseStartedAt < 100
+  );
   if (
     state.markerAnimationFramePending
     || state.annotationMode !== "dot"
-    || state.session.dot_marker_animation_enabled === false
+    || (state.session.dot_marker_animation_enabled === false && !pulseActive)
     || !activeDot()
   ) {
     return;
@@ -1095,7 +1128,19 @@ function render(animationTime = performance.now()) {
     }
     const queryDot = activeDot(record);
     if (queryDot) {
-      drawDotMarker(queryDot, true, animationTime);
+      const queryIdentity = `${currentDescriptor()?.relative_path || ""}:${queryDot.id}`;
+      if (queryIdentity !== state.activeQueryIdentity) {
+        state.activeQueryIdentity = queryIdentity;
+        state.activeQueryPulseStartedAt = animationTime;
+      }
+      const pulseElapsed = animationTime - state.activeQueryPulseStartedAt;
+      const pulseProgress = pulseElapsed >= 0 && pulseElapsed < 100
+        ? pulseElapsed / 100
+        : null;
+      drawDotMarker(queryDot, true, animationTime, pulseProgress);
+    } else {
+      state.activeQueryIdentity = null;
+      state.activeQueryPulseStartedAt = 0;
     }
   } else if (state.showOverlay) {
       for (const stroke of record?.strokes || []) {
@@ -1519,6 +1564,10 @@ function wireEvents() {
   elements.animateCurrentDot.addEventListener("click", (event) => {
     const enabled = event.currentTarget.getAttribute("aria-checked") !== "true";
     setDotMarkerAnimation(enabled);
+  });
+  elements.solidCurrentDot.addEventListener("click", (event) => {
+    const enabled = event.currentTarget.getAttribute("aria-checked") !== "true";
+    setDotMarkerSolid(enabled);
   });
   elements.resetDotHotkeysButton.addEventListener("click", resetDotHotkeys);
   document.querySelectorAll("[data-dot-hotkey-input]").forEach((input) => {

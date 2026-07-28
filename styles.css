@@ -546,6 +546,13 @@ kbd,
   text-transform: uppercase;
 }
 
+.hotkey-edit-note {
+  margin: -3px 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .mini-text-button {
   padding: 3px 0;
   color: var(--coral-dark);
@@ -1289,6 +1296,16 @@ body[data-annotation-mode="dot"] #annotationCanvas {
   margin: 4px 0 18px;
   font-family: var(--font-display);
   font-size: 27px;
+}
+
+.dialog-instruction {
+  margin: -8px 0 16px;
+  padding: 9px 11px;
+  border-left: 3px solid var(--coral);
+  color: #46534f;
+  background: #f6f0e7;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
 .shortcut-grid {

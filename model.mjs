@@ -94,6 +94,7 @@ export function createSession(datasetName = "Untitled dataset") {
     dot_marker_diameter_px: DEFAULT_DOT_MARKER_DIAMETER_PX,
     dot_marker_diameter_fraction: DEFAULT_DOT_MARKER_DIAMETER_FRACTION,
     dot_marker_animation_enabled: true,
+    dot_marker_solid_enabled: false,
     dot_hotkeys: dotHotkeys,
     created_at_utc: now,
     updated_at_utc: now,
@@ -259,6 +260,7 @@ export function normalizeSession(rawDocument) {
     (session.dot_marker_diameter_fraction * DOT_MARKER_REFERENCE_SHORT_EDGE_PX).toFixed(6),
   );
   session.dot_marker_animation_enabled = rawDocument.dot_marker_animation_enabled !== false;
+  session.dot_marker_solid_enabled = rawDocument.dot_marker_solid_enabled === true;
   session.dot_hotkeys = normalizeDotHotkeys(rawDocument.dot_hotkeys);
   session.dot_classes = DOT_CLASS_DEFINITIONS.map((item) => ({
     ...item,
@@ -526,6 +528,7 @@ export function sessionToCsv(session) {
     "session_dot_marker_diameter_px",
     "session_dot_marker_diameter_fraction",
     "session_dot_marker_animation_enabled",
+    "session_dot_marker_solid_enabled",
     "session_hotkey_live",
     "session_hotkey_dsc",
     "session_hotkey_rubble",
@@ -607,6 +610,7 @@ export function sessionToCsv(session) {
     session_dot_marker_diameter_px: document.dot_marker_diameter_px,
     session_dot_marker_diameter_fraction: document.dot_marker_diameter_fraction,
     session_dot_marker_animation_enabled: document.dot_marker_animation_enabled,
+    session_dot_marker_solid_enabled: document.dot_marker_solid_enabled,
     session_hotkey_live: document.dot_hotkeys.live,
     session_hotkey_dsc: document.dot_hotkeys.dsc,
     session_hotkey_rubble: document.dot_hotkeys.rubble,
@@ -876,6 +880,9 @@ export function sessionFromCsv(csvText) {
       session.dot_marker_animation_enabled = animationValue === ""
         ? true
         : !new Set(["false", "0", "no"]).has(animationValue);
+      const solidValue = valueAt(row, "session_dot_marker_solid_enabled")
+        .toLocaleLowerCase();
+      session.dot_marker_solid_enabled = new Set(["true", "1", "yes"]).has(solidValue);
       session.dot_hotkeys = normalizeDotHotkeys({
         live: valueAt(row, "session_hotkey_live"),
         dsc: valueAt(row, "session_hotkey_dsc"),

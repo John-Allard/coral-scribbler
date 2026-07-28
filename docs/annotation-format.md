@@ -44,7 +44,7 @@ self-contained. Important columns include:
 
 | Scope | Columns |
 | --- | --- |
-| Session | `schema_version`, `session_id`, `dataset_name`, `annotator`, `annotation_mode`, `session_current_image_relative_path`, `session_dot_target_count`, marker diameter/fraction and animation fields, five `session_hotkey_*` fields, timestamps |
+| Session | `schema_version`, `session_id`, `dataset_name`, `annotator`, `annotation_mode`, `session_current_image_relative_path`, `session_dot_target_count`, marker diameter/fraction, blink/solid display fields, five `session_hotkey_*` fields, timestamps |
 | Image | path, name, dimensions, file metadata, review state, notes, dot counts, image and usable-area percentages |
 | Dot | `dot_id`, `dot_index`, `dot_x`, `dot_y`, `dot_class_id`, `dot_training_value`, `dot_classified_at_utc` |
 | Stroke | `stroke_id`, `class_id`, `training_value`, `brush_diameter_px`, `stroke_created_at_utc` |
@@ -62,7 +62,7 @@ mode, completing all target dots sets the image to reviewed. In scribble mode,
 an image may be reviewed with no strokes when it contains no useful rubble or
 sediment examples.
 
-Dot marker fraction, color-cycle preference, and hotkey assignments are interface
+Dot marker fraction, blink/solid preferences, and hotkey assignments are interface
 settings retained for method provenance and consistent session resumption.
 `session_dot_marker_diameter_fraction` is relative to the image short edge;
 `session_dot_marker_diameter_px` is the equivalent diameter at a 720-pixel

@@ -83,6 +83,7 @@ test("new sessions default to 50 uniformly sampled dot queries", () => {
   assert.equal(session.dot_marker_diameter_px, DEFAULT_DOT_MARKER_DIAMETER_PX);
   assert.equal(session.dot_marker_diameter_fraction, DEFAULT_DOT_MARKER_DIAMETER_FRACTION);
   assert.equal(session.dot_marker_animation_enabled, true);
+  assert.equal(session.dot_marker_solid_enabled, false);
   assert.deepEqual(session.dot_hotkeys, {
     live: "l",
     dsc: "d",
@@ -177,6 +178,7 @@ test("CSV round-trip preserves metadata and exact stroke geometry", () => {
   session.dot_marker_diameter_px = 14;
   session.dot_marker_diameter_fraction = 14 / DOT_MARKER_REFERENCE_SHORT_EDGE_PX;
   session.dot_marker_animation_enabled = false;
+  session.dot_marker_solid_enabled = true;
   session.dot_hotkeys = {
     live: "q",
     dsc: "w",
@@ -218,6 +220,7 @@ test("CSV round-trip preserves metadata and exact stroke geometry", () => {
   assert.equal(restored.dot_marker_diameter_px, 14);
   assert.equal(restored.dot_marker_diameter_fraction, 14 / DOT_MARKER_REFERENCE_SHORT_EDGE_PX);
   assert.equal(restored.dot_marker_animation_enabled, false);
+  assert.equal(restored.dot_marker_solid_enabled, true);
   assert.deepEqual(restored.dot_hotkeys, session.dot_hotkeys);
   assert.equal(restored.current_image_relative_path, "frame,001.png");
   assert.equal(restoredImage.notes, image.notes);

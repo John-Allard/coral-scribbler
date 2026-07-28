@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#f2ede2">
   <title>Coral Scribbler</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23dc684d'/%3E%3Cpath d='M15 26V7m0 7-6-5m6 9 7-6' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=20260728d">
+  <link rel="stylesheet" href="styles.css?v=20260728e">
 </head>
 <body data-annotation-mode="dot">
   <div class="app-shell">
@@ -64,15 +64,20 @@
           <output id="dotSizeValue" for="dotSize">10 px</output>
         </div>
         <input id="dotSize" type="range" min="4" max="16" step="1" value="10">
-        <p class="field-note">Range scales with image size. The inner ring shows the sampled footprint.</p>
+        <p class="field-note">Range scales with image size. The marker shows the sampled footprint.</p>
         <button id="animateCurrentDot" class="animation-toggle" type="button" role="checkbox" aria-checked="true">
           <span class="checkbox-indicator" aria-hidden="true"></span>
-          <span>Cycle current-dot color</span>
+          <span>Blink current dot black / white</span>
+        </button>
+        <button id="solidCurrentDot" class="animation-toggle" type="button" role="checkbox" aria-checked="false">
+          <span class="checkbox-indicator" aria-hidden="true"></span>
+          <span>Solid current query dot</span>
         </button>
         <div class="hotkey-heading">
           <strong>Class hotkeys</strong>
           <button id="resetDotHotkeysButton" class="mini-text-button" type="button">Reset</button>
         </div>
+        <p class="hotkey-edit-note">Click a key to edit.</p>
         <div class="hotkey-grid">
           <label><span class="count-dot live"></span><span>Live</span><input data-dot-hotkey-input="live" value="L" maxlength="1" inputmode="text" aria-label="Live hotkey"></label>
           <label><span class="count-dot dsc"></span><span>DSC</span><input data-dot-hotkey-input="dsc" value="D" maxlength="1" inputmode="text" aria-label="DSC hotkey"></label>
@@ -280,6 +285,9 @@
         </div>
         <button class="icon-button" value="close" aria-label="Close help">&#215;</button>
       </div>
+      <p class="dialog-instruction" data-mode-panel="dot">
+        Class keys are customizable under <strong>Class hotkeys</strong> in the left panel.
+      </p>
       <div class="shortcut-grid">
         <div data-mode-panel="dot"><kbd data-dot-hotkey-display="live">L</kbd><span>Live dot</span></div>
         <div data-mode-panel="dot"><kbd data-dot-hotkey-display="dsc">D</kbd><span>DSC dot</span></div>
@@ -304,6 +312,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.mjs?v=20260728d"></script>
+  <script type="module" src="app.mjs?v=20260728e"></script>
 </body>
 </html>
