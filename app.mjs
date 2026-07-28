@@ -25,12 +25,12 @@ import {
   sessionToCsv,
   storageKeyForDataset,
   summarizeSession,
-} from "./model.mjs?v=20260728e";
+} from "./model.mjs?v=20260728f";
 import {
   describeDroppedSelection,
   describeFileSelection,
   isSupportedImageFile,
-} from "./file-selection.mjs?v=20260728e";
+} from "./file-selection.mjs?v=20260728f";
 
 const $ = (id) => document.getElementById(id);
 
@@ -126,6 +126,7 @@ const state = {
   lastMarkerAnimationAt: 0,
   activeQueryIdentity: null,
   activeQueryPulseStartedAt: 0,
+  activeQueryPulseTimer: null,
   objectUrls: [],
 };
 
@@ -155,6 +156,23 @@ function cleanupObjectUrls() {
     URL.revokeObjectURL(url);
   }
   state.objectUrls = [];
+}
+
+function clearActiveQueryPulse() {
+  clearTimeout(state.activeQueryPulseTimer);
+  state.activeQueryPulseTimer = null;
+  state.activeQueryPulseStartedAt = 0;
+}
+
+function startActiveQueryPulse(queryIdentity, animationTime) {
+  clearActiveQueryPulse();
+  state.activeQueryIdentity = queryIdentity;
+  state.activeQueryPulseStartedAt = animationTime;
+  state.activeQueryPulseTimer = setTimeout(() => {
+    state.activeQueryPulseTimer = null;
+    state.activeQueryPulseStartedAt = 0;
+    render();
+  }, 100);
 }
 
 function descriptorPaths() {
@@ -685,7 +703,7 @@ async function setDataset(descriptors, datasetName, session, options = {}) {
   state.imageElement = null;
   state.currentIndex = -1;
   state.activeQueryIdentity = null;
-  state.activeQueryPulseStartedAt = 0;
+  clearActiveQueryPulse();
 
   for (const descriptor of state.descriptors) {
     ensureImage(state.session, descriptor);
@@ -1130,8 +1148,7 @@ function render(animationTime = performance.now()) {
     if (queryDot) {
       const queryIdentity = `${currentDescriptor()?.relative_path || ""}:${queryDot.id}`;
       if (queryIdentity !== state.activeQueryIdentity) {
-        state.activeQueryIdentity = queryIdentity;
-        state.activeQueryPulseStartedAt = animationTime;
+        startActiveQueryPulse(queryIdentity, animationTime);
       }
       const pulseElapsed = animationTime - state.activeQueryPulseStartedAt;
       const pulseProgress = pulseElapsed >= 0 && pulseElapsed < 100
@@ -1140,7 +1157,7 @@ function render(animationTime = performance.now()) {
       drawDotMarker(queryDot, true, animationTime, pulseProgress);
     } else {
       state.activeQueryIdentity = null;
-      state.activeQueryPulseStartedAt = 0;
+      clearActiveQueryPulse();
     }
   } else if (state.showOverlay) {
       for (const stroke of record?.strokes || []) {
