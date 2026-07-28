@@ -1,12 +1,16 @@
 import {
   CLASS_DEFINITIONS,
+  DEFAULT_DOT_MARKER_DIAMETER_FRACTION,
   DEFAULT_DOT_MARKER_DIAMETER_PX,
   DOT_CLASS_DEFINITIONS,
+  DOT_MARKER_REFERENCE_SHORT_EDGE_PX,
   DOTS_PER_IMAGE,
-  MAX_DOT_MARKER_DIAMETER_PX,
-  MIN_DOT_MARKER_DIAMETER_PX,
+  MAX_DOT_MARKER_DIAMETER_FRACTION,
+  MIN_DOT_MARKER_DIAMETER_FRACTION,
   createSession,
   documentForExport,
+  dotMarkerDiameterForImage,
+  dotMarkerDiameterRange,
   ensureImage,
   ensureDotQueries,
   imageDotSummary,
@@ -48,6 +52,7 @@ const elements = {
   annotatorInput: $("annotatorInput"),
   dotSize: $("dotSize"),
   dotSizeValue: $("dotSizeValue"),
+  animateCurrentDot: $("animateCurrentDot"),
   resetDotHotkeysButton: $("resetDotHotkeysButton"),
   dotHotkeyReference: $("dotHotkeyReference"),
   brushSize: $("brushSize"),
@@ -116,6 +121,8 @@ const state = {
   saveTimer: null,
   saveGeneration: 0,
   toastTimer: null,
+  markerAnimationFramePending: false,
+  lastMarkerAnimationAt: 0,
   objectUrls: [],
 };
 
@@ -348,10 +355,19 @@ function classifyActiveDot(classId) {
 }
 
 function updateDotSettingsInterface() {
-  const diameter = state.session.dot_marker_diameter_px || DEFAULT_DOT_MARKER_DIAMETER_PX;
+  const record = currentRecord();
+  const width = record?.width || DOT_MARKER_REFERENCE_SHORT_EDGE_PX;
+  const height = record?.height || DOT_MARKER_REFERENCE_SHORT_EDGE_PX;
+  const range = dotMarkerDiameterRange(width, height);
+  const fraction = state.session.dot_marker_diameter_fraction
+    || DEFAULT_DOT_MARKER_DIAMETER_FRACTION;
+  const diameter = dotMarkerDiameterForImage(fraction, width, height);
   state.session.dot_hotkeys = normalizeDotHotkeys(state.session.dot_hotkeys);
+  elements.dotSize.min = String(range.min);
+  elements.dotSize.max = String(range.max);
   elements.dotSize.value = String(diameter);
   elements.dotSizeValue.textContent = `${diameter} px`;
+  elements.animateCurrentDot.checked = state.session.dot_marker_animation_enabled !== false;
   for (const definition of DOT_CLASS_DEFINITIONS) {
     const key = state.session.dot_hotkeys[definition.id].toLocaleUpperCase();
     document.querySelectorAll(`[data-dot-hotkey-display="${definition.id}"]`).forEach((element) => {
@@ -368,10 +384,33 @@ function updateDotSettingsInterface() {
 }
 
 function setDotMarkerDiameter(value) {
-  state.session.dot_marker_diameter_px = Math.max(
-    MIN_DOT_MARKER_DIAMETER_PX,
-    Math.min(MAX_DOT_MARKER_DIAMETER_PX, Math.round(Number(value) || DEFAULT_DOT_MARKER_DIAMETER_PX)),
+  const record = currentRecord();
+  const width = record?.width || DOT_MARKER_REFERENCE_SHORT_EDGE_PX;
+  const height = record?.height || DOT_MARKER_REFERENCE_SHORT_EDGE_PX;
+  const range = dotMarkerDiameterRange(width, height);
+  const diameter = Math.max(
+    range.min,
+    Math.min(range.max, Math.round(Number(value) || DEFAULT_DOT_MARKER_DIAMETER_PX)),
   );
+  state.session.dot_marker_diameter_fraction = Math.max(
+    MIN_DOT_MARKER_DIAMETER_FRACTION,
+    Math.min(MAX_DOT_MARKER_DIAMETER_FRACTION, diameter / range.short_edge_px),
+  );
+  state.session.dot_marker_diameter_px = Number(
+    (
+      state.session.dot_marker_diameter_fraction
+      * DOT_MARKER_REFERENCE_SHORT_EDGE_PX
+    ).toFixed(6),
+  );
+  updateDotSettingsInterface();
+  if (state.descriptors.length) {
+    scheduleSave();
+  }
+  render();
+}
+
+function setDotMarkerAnimation(enabled) {
+  state.session.dot_marker_animation_enabled = Boolean(enabled);
   updateDotSettingsInterface();
   if (state.descriptors.length) {
     scheduleSave();
@@ -946,28 +985,84 @@ function drawStroke(stroke, alpha = state.overlayOpacity) {
   ctx.restore();
 }
 
-function drawDotMarker(dot, isActive = false) {
+function drawDotMarker(dot, isActive = false, animationTime = performance.now()) {
   const [x, y] = imageToCanvas(dot.x, dot.y);
-  const diameter = state.session.dot_marker_diameter_px || DEFAULT_DOT_MARKER_DIAMETER_PX;
+  const record = currentRecord();
+  const diameter = dotMarkerDiameterForImage(
+    state.session.dot_marker_diameter_fraction || DEFAULT_DOT_MARKER_DIAMETER_FRACTION,
+    record?.width,
+    record?.height,
+  );
   const outerRadius = Math.max(1, diameter * state.view.scale / 2);
-  const lineWidth = Math.min(2, Math.max(1, outerRadius * 0.25));
-  const drawRadius = Math.max(0.5, outerRadius - lineWidth / 2);
   const definition = isActive ? null : dotClassById[dot.class_id];
   if (!isActive && !definition) {
     return;
   }
   ctx.save();
-  ctx.fillStyle = isActive ? "#ff6a3d" : definition.color;
-  ctx.strokeStyle = "rgba(255, 255, 255, 0.96)";
-  ctx.lineWidth = lineWidth;
-  ctx.beginPath();
-  ctx.arc(x, y, drawRadius, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
+  if (isActive) {
+    const animated = state.session.dot_marker_animation_enabled !== false;
+    const pulse = animated ? (Math.sin(animationTime / 230) + 1) / 2 : 0.45;
+    const haloRadius = outerRadius + 4 + pulse * 5;
+    ctx.globalAlpha = 0.58 + pulse * 0.38;
+    ctx.strokeStyle = "#ffef4a";
+    ctx.lineWidth = 2.5;
+    ctx.shadowColor = "#ff5b2e";
+    ctx.shadowBlur = 7 + pulse * 5;
+    ctx.beginPath();
+    ctx.arc(x, y, haloRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // The hollow inner ring is the exact sampled footprint; the halo only identifies it.
+    const footprintLineWidth = Math.min(2.5, Math.max(1.5, outerRadius * 0.28));
+    const footprintRadius = Math.max(0.5, outerRadius - footprintLineWidth / 2);
+    ctx.globalAlpha = 1;
+    ctx.shadowBlur = 0;
+    ctx.strokeStyle = "rgba(8, 18, 17, 0.9)";
+    ctx.lineWidth = footprintLineWidth + 3;
+    ctx.beginPath();
+    ctx.arc(x, y, footprintRadius, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = footprintLineWidth;
+    ctx.beginPath();
+    ctx.arc(x, y, footprintRadius, 0, Math.PI * 2);
+    ctx.stroke();
+  } else {
+    const lineWidth = Math.min(2, Math.max(1, outerRadius * 0.25));
+    const drawRadius = Math.max(0.5, outerRadius - lineWidth / 2);
+    ctx.fillStyle = definition.color;
+    ctx.strokeStyle = "rgba(255, 255, 255, 0.96)";
+    ctx.lineWidth = lineWidth;
+    ctx.beginPath();
+    ctx.arc(x, y, drawRadius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
   ctx.restore();
 }
 
-function render() {
+function scheduleMarkerAnimation() {
+  if (
+    state.markerAnimationFramePending
+    || state.annotationMode !== "dot"
+    || state.session.dot_marker_animation_enabled === false
+    || !activeDot()
+  ) {
+    return;
+  }
+  state.markerAnimationFramePending = true;
+  requestAnimationFrame((timestamp) => {
+    state.markerAnimationFramePending = false;
+    if (timestamp - state.lastMarkerAnimationAt < 40) {
+      scheduleMarkerAnimation();
+      return;
+    }
+    state.lastMarkerAnimationAt = timestamp;
+    render(timestamp);
+  });
+}
+
+function render(animationTime = performance.now()) {
   const { width, height, dpr } = state.canvasSize;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, width, height);
@@ -999,7 +1094,7 @@ function render() {
     }
     const queryDot = activeDot(record);
     if (queryDot) {
-      drawDotMarker(queryDot, true);
+      drawDotMarker(queryDot, true, animationTime);
     }
   } else if (state.showOverlay) {
       for (const stroke of record?.strokes || []) {
@@ -1029,6 +1124,7 @@ function render() {
     ctx.stroke();
     ctx.restore();
   }
+  scheduleMarkerAnimation();
 }
 
 function canvasCoordinates(event) {
@@ -1415,6 +1511,9 @@ function wireEvents() {
     button.addEventListener("click", () => classifyActiveDot(button.dataset.dotClass));
   });
   elements.dotSize.addEventListener("input", () => setDotMarkerDiameter(elements.dotSize.value));
+  elements.animateCurrentDot.addEventListener("change", () => {
+    setDotMarkerAnimation(elements.animateCurrentDot.checked);
+  });
   elements.resetDotHotkeysButton.addEventListener("click", resetDotHotkeys);
   document.querySelectorAll("[data-dot-hotkey-input]").forEach((input) => {
     input.addEventListener("focus", () => input.select());

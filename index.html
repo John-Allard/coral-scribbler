@@ -61,10 +61,14 @@
       <section class="panel-section dot-settings-section" data-mode-panel="dot">
         <div class="section-heading">
           <label for="dotSize">Dot diameter</label>
-          <output id="dotSizeValue" for="dotSize">12 px</output>
+          <output id="dotSizeValue" for="dotSize">10 px</output>
         </div>
-        <input id="dotSize" type="range" min="4" max="48" step="2" value="12">
-        <p class="field-note">Current and classified dots use this same size in original-image pixels.</p>
+        <input id="dotSize" type="range" min="4" max="16" step="1" value="10">
+        <p class="field-note">Range scales with image size. The inner ring shows the sampled footprint.</p>
+        <label class="animation-toggle">
+          <input id="animateCurrentDot" type="checkbox" checked>
+          <span>Pulse current-dot highlight</span>
+        </label>
         <div class="hotkey-heading">
           <strong>Class hotkeys</strong>
           <button id="resetDotHotkeysButton" class="mini-text-button" type="button">Reset</button>

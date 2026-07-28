@@ -492,6 +492,23 @@ kbd,
   accent-color: var(--coral);
 }
 
+.animation-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 11px;
+  color: #43504c;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.animation-toggle input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--coral);
+}
+
 .hotkey-heading {
   display: flex;
   align-items: center;
@@ -556,7 +573,7 @@ kbd,
 
 body[data-annotation-mode="dot"] .image-queue-section {
   min-height: 180px;
-  height: calc(100% - 500px);
+  height: calc(100% - 525px);
 }
 
 .search-input {

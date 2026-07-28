@@ -2,12 +2,16 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  DEFAULT_DOT_MARKER_DIAMETER_FRACTION,
   DEFAULT_DOT_MARKER_DIAMETER_PX,
+  DOT_MARKER_REFERENCE_SHORT_EDGE_PX,
   DOTS_PER_IMAGE,
   LEGACY_SCHEMA_VERSION,
   SCHEMA_VERSION,
   createSession,
   documentForExport,
+  dotMarkerDiameterForImage,
+  dotMarkerDiameterRange,
   ensureDotQueries,
   ensureImage,
   imageDotSummary,
@@ -75,6 +79,8 @@ test("new sessions default to 50 uniformly sampled dot queries", () => {
   });
   assert.equal(session.annotation_mode, "dot");
   assert.equal(session.dot_marker_diameter_px, DEFAULT_DOT_MARKER_DIAMETER_PX);
+  assert.equal(session.dot_marker_diameter_fraction, DEFAULT_DOT_MARKER_DIAMETER_FRACTION);
+  assert.equal(session.dot_marker_animation_enabled, true);
   assert.deepEqual(session.dot_hotkeys, {
     live: "l",
     dsc: "d",
@@ -85,6 +91,21 @@ test("new sessions default to 50 uniformly sampled dot queries", () => {
   assert.equal(dots.length, 50);
   assert.equal(new Set(dots.map((dot) => dot.index)).size, 50);
   assert.ok(dots.every((dot) => dot.x >= 0 && dot.x < 200 && dot.y >= 0 && dot.y < 100));
+});
+
+test("dot diameter range scales with the image short edge", () => {
+  assert.deepEqual(dotMarkerDiameterRange(1200, 720), {
+    short_edge_px: 720,
+    min: 4,
+    max: 16,
+  });
+  assert.deepEqual(dotMarkerDiameterRange(3840, 2160), {
+    short_edge_px: 2160,
+    min: 12,
+    max: 48,
+  });
+  assert.equal(dotMarkerDiameterForImage(DEFAULT_DOT_MARKER_DIAMETER_FRACTION, 1200, 720), 10);
+  assert.equal(dotMarkerDiameterForImage(DEFAULT_DOT_MARKER_DIAMETER_FRACTION, 3840, 2160), 30);
 });
 
 test("custom dot hotkeys are single, unique letters or numbers", () => {
@@ -151,7 +172,9 @@ test("dot summaries apply the strict over-50-percent unknown exclusion", () => {
 test("CSV round-trip preserves metadata and exact stroke geometry", () => {
   const session = createSession("Gulf, pilot");
   session.annotator = "=unsafe spreadsheet text";
-  session.dot_marker_diameter_px = 28;
+  session.dot_marker_diameter_px = 14;
+  session.dot_marker_diameter_fraction = 14 / DOT_MARKER_REFERENCE_SHORT_EDGE_PX;
+  session.dot_marker_animation_enabled = false;
   session.dot_hotkeys = {
     live: "q",
     dsc: "w",
@@ -189,7 +212,9 @@ test("CSV round-trip preserves metadata and exact stroke geometry", () => {
   const restored = sessionFromCsv(csv);
   const restoredImage = restored.images["frame,001.png"];
   assert.equal(restored.annotator, "=unsafe spreadsheet text");
-  assert.equal(restored.dot_marker_diameter_px, 28);
+  assert.equal(restored.dot_marker_diameter_px, 14);
+  assert.equal(restored.dot_marker_diameter_fraction, 14 / DOT_MARKER_REFERENCE_SHORT_EDGE_PX);
+  assert.equal(restored.dot_marker_animation_enabled, false);
   assert.deepEqual(restored.dot_hotkeys, session.dot_hotkeys);
   assert.equal(restoredImage.notes, image.notes);
   assert.equal(restoredImage.review_status, "reviewed");
@@ -212,9 +237,14 @@ test("legacy scribble sessions migrate without creating dots", () => {
   legacy.schema_version = LEGACY_SCHEMA_VERSION;
   delete legacy.annotation_mode;
   delete legacy.dot_target_count;
+  delete legacy.dot_marker_diameter_fraction;
+  delete legacy.dot_marker_animation_enabled;
+  legacy.dot_marker_diameter_px = 48;
   const restored = normalizeSession(legacy);
   assert.equal(restored.schema_version, SCHEMA_VERSION);
   assert.equal(restored.annotation_mode, "scribble");
+  assert.equal(restored.dot_marker_diameter_px, 16);
+  assert.equal(restored.dot_marker_animation_enabled, true);
 });
 
 
