@@ -25,12 +25,12 @@ import {
   sessionToCsv,
   storageKeyForDataset,
   summarizeSession,
-} from "./model.mjs?v=20260728f";
+} from "./model.mjs?v=20260728g";
 import {
   describeDroppedSelection,
   describeFileSelection,
   isSupportedImageFile,
-} from "./file-selection.mjs?v=20260728f";
+} from "./file-selection.mjs?v=20260728g";
 
 const $ = (id) => document.getElementById(id);
 
@@ -172,7 +172,7 @@ function startActiveQueryPulse(queryIdentity, animationTime) {
     state.activeQueryPulseTimer = null;
     state.activeQueryPulseStartedAt = 0;
     render();
-  }, 100);
+  }, 200);
 }
 
 function descriptorPaths() {
@@ -1092,7 +1092,7 @@ function drawDotMarker(dot, isActive = false, animationTime = performance.now(),
 function scheduleMarkerAnimation() {
   const pulseActive = (
     state.activeQueryPulseStartedAt > 0
-    && performance.now() - state.activeQueryPulseStartedAt < 100
+    && performance.now() - state.activeQueryPulseStartedAt < 200
   );
   if (
     state.markerAnimationFramePending
@@ -1151,8 +1151,8 @@ function render(animationTime = performance.now()) {
         startActiveQueryPulse(queryIdentity, animationTime);
       }
       const pulseElapsed = animationTime - state.activeQueryPulseStartedAt;
-      const pulseProgress = pulseElapsed >= 0 && pulseElapsed < 100
-        ? pulseElapsed / 100
+      const pulseProgress = pulseElapsed >= 0 && pulseElapsed < 200
+        ? pulseElapsed / 200
         : null;
       drawDotMarker(queryDot, true, animationTime, pulseProgress);
     } else {

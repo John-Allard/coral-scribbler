@@ -27,7 +27,7 @@ uploaded to GitHub or any other server.
 The **Dot diameter** slider scales to the current image dimensions. Its range
 is 4-16 pixels on the 1200x720 demo and proportionally larger on larger images.
 The current query uses an exact-footprint marker that blinks discretely between
-black and white. A 100 ms arrival ring identifies each newly active query.
+black and white. A 200 ms arrival ring identifies each newly active query.
 Blinking can be disabled, and the query marker can be switched between a hollow
 ring and a solid dot. Class hotkeys can be replaced with any five unique
 letters or numbers; **Reset** restores `L/D/R/S/U`.
