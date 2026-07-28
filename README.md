@@ -21,8 +21,8 @@ uploaded to GitHub or any other server.
    immediately.
 5. After all 50 dots are classified, press `Enter` to continue to the next
    image. Undo and redo remain available.
-6. Select **Export CSV** before closing or changing computers, then send that
-   CSV file to the project team.
+6. Select **Save session CSV** before closing or changing computers, then send
+   that CSV file to the project team.
 
 The **Dot diameter** slider scales to the current image dimensions. Its range
 is 4-16 pixels on the 1200x720 demo and proportionally larger on larger images.
@@ -31,12 +31,16 @@ color cycles without changing size; color cycling can be disabled. Class
 hotkeys can be replaced with any five unique letters or numbers; **Reset**
 restores `L/D/R/S/U`.
 
-The browser keeps a convenience autosave for the selected dataset, but that
-backup belongs to one browser profile on one device. Exported CSV is the
-durable research record.
+Every dot, hotkey change, marker setting, note, and image position is autosaved
+in the current browser. After reloading the page, select the same dataset folder
+again; the app restores the matching browser backup and returns to the last
+open image. Browser security prevents the page from reopening local image files
+without that folder selection.
 
-To continue an exported session, select the same folder or files and then use
-**Import CSV**.
+The browser backup belongs to one browser profile on one device and can be
+lost if site data is cleared or private browsing ends. **Save session CSV** is
+the durable research record. To continue one, select the same folder or files
+and then use **Resume session CSV**.
 
 ## Dot Counts
 

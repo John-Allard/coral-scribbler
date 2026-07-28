@@ -55,6 +55,7 @@ test("session round-trip preserves sparse strokes and review state", () => {
     created_at_utc: "2026-07-21T19:59:00.000Z",
     points: [[10.25, 20.5, 0], [14.75, 24.5, 20]],
   });
+  session.current_image_relative_path = "Dive 1/frame,001.png";
 
   const restored = normalizeSession(documentForExport(session));
   assert.equal(restored.schema_version, SCHEMA_VERSION);
@@ -62,6 +63,7 @@ test("session round-trip preserves sparse strokes and review state", () => {
   assert.equal(restored.images["Dive 1/frame,001.png"].strokes.length, 1);
   assert.equal(restored.images["Dive 1/frame,001.png"].strokes[0].points[1][0], 14.75);
   assert.equal(restored.images["Dive 1/frame,001.png"].review_status, "reviewed");
+  assert.equal(restored.current_image_relative_path, "Dive 1/frame,001.png");
 });
 
 test("new sessions default to 50 uniformly sampled dot queries", () => {
@@ -182,6 +184,7 @@ test("CSV round-trip preserves metadata and exact stroke geometry", () => {
     sediment: "r",
     unknown_other: "f",
   };
+  session.current_image_relative_path = "frame,001.png";
   const image = ensureImage(session, {
     relative_path: "frame,001.png",
     name: "frame,001.png",
@@ -216,6 +219,7 @@ test("CSV round-trip preserves metadata and exact stroke geometry", () => {
   assert.equal(restored.dot_marker_diameter_fraction, 14 / DOT_MARKER_REFERENCE_SHORT_EDGE_PX);
   assert.equal(restored.dot_marker_animation_enabled, false);
   assert.deepEqual(restored.dot_hotkeys, session.dot_hotkeys);
+  assert.equal(restored.current_image_relative_path, "frame,001.png");
   assert.equal(restoredImage.notes, image.notes);
   assert.equal(restoredImage.review_status, "reviewed");
   assert.equal(restoredImage.strokes[0].class_id, "sediment");

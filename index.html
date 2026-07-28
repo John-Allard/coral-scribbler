@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#f2ede2">
   <title>Coral Scribbler</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23dc684d'/%3E%3Cpath d='M15 26V7m0 7-6-5m6 9 7-6' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=20260728c">
+  <link rel="stylesheet" href="styles.css?v=20260728d">
 </head>
 <body data-annotation-mode="dot">
   <div class="app-shell">
@@ -28,9 +28,9 @@
         <button class="button button-primary" data-open-folder type="button">Select dataset folder</button>
         <input id="folderInput" class="visually-hidden" type="file" webkitdirectory directory multiple>
         <input id="fileInput" class="visually-hidden" type="file" accept="image/*" multiple>
-        <button id="importButton" class="button" type="button" disabled>Import CSV</button>
+        <button id="importButton" class="button" type="button" disabled>Resume session CSV</button>
         <input id="importInput" class="visually-hidden" type="file" accept="text/csv,.csv">
-        <button id="exportCsvButton" class="button" type="button" disabled>Export CSV</button>
+        <button id="exportCsvButton" class="button" type="button" disabled>Save session CSV</button>
         <button id="helpButton" class="icon-button" type="button" aria-label="Show keyboard shortcuts">?</button>
       </div>
     </header>
@@ -190,7 +190,7 @@
             <span aria-hidden="true">or</span>
             <button id="demoButton" class="text-button" type="button">try a demo image</button>
           </div>
-          <small class="privacy-note">No images or annotations are uploaded. Export CSV before changing browsers or computers.</small>
+          <small class="privacy-note">Progress is autosaved in this browser. After a reload, select the same folder to restore it. Save a session CSV for a durable backup or another computer.</small>
         </div>
         <div id="loadingState" class="loading-state" hidden>
           <span class="loader"></span>
@@ -304,6 +304,6 @@
   </dialog>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.mjs?v=20260728c"></script>
+  <script type="module" src="app.mjs?v=20260728d"></script>
 </body>
 </html>

@@ -89,6 +89,7 @@ export function createSession(datasetName = "Untitled dataset") {
     dataset_name: datasetName,
     annotator: "",
     annotation_mode: "dot",
+    current_image_relative_path: null,
     dot_target_count: DOTS_PER_IMAGE,
     dot_marker_diameter_px: DEFAULT_DOT_MARKER_DIAMETER_PX,
     dot_marker_diameter_fraction: DEFAULT_DOT_MARKER_DIAMETER_FRACTION,
@@ -236,6 +237,9 @@ export function normalizeSession(rawDocument) {
   session.annotation_mode = ANNOTATION_MODES.has(rawDocument.annotation_mode)
     ? rawDocument.annotation_mode
     : rawDocument.schema_version === LEGACY_SCHEMA_VERSION ? "scribble" : "dot";
+  session.current_image_relative_path = rawDocument.current_image_relative_path
+    ? String(rawDocument.current_image_relative_path)
+    : null;
   session.dot_target_count = Math.max(
     1,
     Math.round(finiteNumber(rawDocument.dot_target_count, DOTS_PER_IMAGE)),
@@ -517,6 +521,7 @@ export function sessionToCsv(session) {
     "dataset_name",
     "annotator",
     "annotation_mode",
+    "session_current_image_relative_path",
     "session_dot_target_count",
     "session_dot_marker_diameter_px",
     "session_dot_marker_diameter_fraction",
@@ -597,6 +602,7 @@ export function sessionToCsv(session) {
     dataset_name: document.dataset_name,
     annotator: document.annotator,
     annotation_mode: document.annotation_mode,
+    session_current_image_relative_path: document.current_image_relative_path || "",
     session_dot_target_count: document.dot_target_count,
     session_dot_marker_diameter_px: document.dot_marker_diameter_px,
     session_dot_marker_diameter_fraction: document.dot_marker_diameter_fraction,
@@ -835,6 +841,7 @@ export function sessionFromCsv(csvText) {
       session.annotation_mode = ANNOTATION_MODES.has(valueAt(row, "annotation_mode"))
         ? valueAt(row, "annotation_mode")
         : schemaVersion === LEGACY_SCHEMA_VERSION ? "scribble" : "dot";
+      session.current_image_relative_path = valueAt(row, "session_current_image_relative_path") || null;
       session.dot_target_count = Math.max(
         1,
         Math.round(csvNumber(

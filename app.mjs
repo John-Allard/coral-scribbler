@@ -25,12 +25,12 @@ import {
   sessionToCsv,
   storageKeyForDataset,
   summarizeSession,
-} from "./model.mjs?v=20260728c";
+} from "./model.mjs?v=20260728d";
 import {
   describeDroppedSelection,
   describeFileSelection,
   isSupportedImageFile,
-} from "./file-selection.mjs?v=20260728c";
+} from "./file-selection.mjs?v=20260728d";
 
 const $ = (id) => document.getElementById(id);
 
@@ -680,6 +680,9 @@ async function setDataset(descriptors, datasetName, session, options = {}) {
   setAnnotationMode(state.annotationMode, { save: false });
   updateInterface();
   if (state.descriptors.length > 0) {
+    const savedIndex = state.descriptors.findIndex(
+      (descriptor) => descriptor.relative_path === state.session.current_image_relative_path,
+    );
     const firstUnreviewed = state.annotationMode === "dot"
       ? state.descriptors.findIndex((descriptor) => (
         !imageDotSummary(
@@ -690,7 +693,7 @@ async function setDataset(descriptors, datasetName, session, options = {}) {
       : state.descriptors.findIndex((descriptor) => (
         state.session.images[descriptor.relative_path]?.review_status !== "reviewed"
       ));
-    await loadImage(firstUnreviewed >= 0 ? firstUnreviewed : 0);
+    await loadImage(savedIndex >= 0 ? savedIndex : firstUnreviewed >= 0 ? firstUnreviewed : 0);
     setSaveStatus(
       "saved",
       state.serverSaveEnabled ? "Project draft autosave ready" : "Browser autosave ready",
@@ -873,7 +876,10 @@ async function loadImage(index) {
     descriptor.width = image.naturalWidth;
     descriptor.height = image.naturalHeight;
     ensureImage(state.session, descriptor);
-    if (state.annotationMode === "dot" && ensureCurrentDotQueries()) {
+    const positionChanged = state.session.current_image_relative_path !== descriptor.relative_path;
+    state.session.current_image_relative_path = descriptor.relative_path;
+    const queriesChanged = state.annotationMode === "dot" && ensureCurrentDotQueries();
+    if (positionChanged || queriesChanged) {
       scheduleSave();
     }
     fitImage();
@@ -1426,12 +1432,16 @@ async function importCsvFile(file) {
     }
     setAnnotationMode(imported.annotation_mode || "dot", { save: false });
     state.histories.clear();
+    const savedIndex = state.descriptors.findIndex(
+      (descriptor) => descriptor.relative_path === imported.current_image_relative_path,
+    );
+    const resumeIndex = savedIndex >= 0 ? savedIndex : Math.max(0, state.currentIndex);
+    state.currentIndex = -1;
+    await loadImage(resumeIndex);
     scheduleSave();
-    updateInterface();
-    render();
     showToast(
       state.descriptors.length
-        ? "Imported CSV annotations. Paths matching the loaded images are now visible."
+        ? "Session resumed from CSV. Paths matching the loaded images are now visible."
         : "Imported CSV annotations. Open the matching image folder to continue.",
       5000,
     );
