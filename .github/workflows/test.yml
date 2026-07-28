@@ -3,7 +3,19 @@ name: Test
 on:
   push:
     branches: [main]
+    paths:
+      - "**/*.mjs"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/test.yml"
   pull_request:
+    paths:
+      - "**/*.mjs"
+      - "tests/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/test.yml"
   workflow_dispatch:
 
 permissions:

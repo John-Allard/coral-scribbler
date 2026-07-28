@@ -87,8 +87,9 @@ There are no runtime dependencies. The data-model tests require Node.js:
 npm test
 ```
 
-GitHub Pages publishes the root of the `main` branch. Any change to the public
-app should pass the tests and be checked with the demo image before release.
+The `Deploy Pages` workflow publishes the static site after every push to
+`main`. The separate model-test workflow runs only when JavaScript, tests, or
+package metadata change.
 
 ## License
 
