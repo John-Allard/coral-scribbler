@@ -2,9 +2,9 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  acceptDotScatter,
   DEFAULT_DOT_MARKER_DIAMETER_FRACTION,
   DEFAULT_DOT_MARKER_DIAMETER_PX,
-  DEFAULT_UNKNOWN_THRESHOLD_FRACTION,
   DOT_MARKER_REFERENCE_SHORT_EDGE_PX,
   DOTS_PER_IMAGE,
   LEGACY_SCHEMA_VERSION,
@@ -29,6 +29,7 @@ import {
 
 function classifyDots(image, classIds) {
   ensureDotQueries(image, DOTS_PER_IMAGE, () => 0.5);
+  image.dot_scatter_accepted = true;
   classIds.forEach((classId, index) => {
     image.dots[index].class_id = classId;
     image.dots[index].classified_at_utc = "2026-07-23T12:00:00.000Z";
@@ -86,7 +87,8 @@ test("new sessions default to 50 uniformly sampled dot queries", () => {
   assert.equal(session.dot_marker_diameter_fraction, DEFAULT_DOT_MARKER_DIAMETER_FRACTION);
   assert.equal(session.dot_marker_animation_enabled, true);
   assert.equal(session.dot_marker_solid_enabled, false);
-  assert.equal(session.dot_unknown_threshold_fraction, DEFAULT_UNKNOWN_THRESHOLD_FRACTION);
+  assert.equal(session.dot_show_unlabeled_markers, true);
+  assert.equal(image.dot_scatter_accepted, false);
   assert.deepEqual(session.dot_hotkeys, {
     live: "l",
     dsc: "d",
@@ -135,66 +137,69 @@ test("custom dot hotkeys are single, unique letters or numbers", () => {
   assert.equal(new Set(Object.values(duplicateFallback)).size, 5);
 });
 
-test("dot summaries apply the strict over-50-percent unknown exclusion", () => {
+test("dot summaries include every complete image regardless of unknown percentage", () => {
   const session = createSession("Gulf");
-  const eligibleImage = ensureImage(session, {
-    relative_path: "eligible.png",
-    name: "eligible.png",
+  const mixedImage = ensureImage(session, {
+    relative_path: "mixed.png",
+    name: "mixed.png",
     width: 100,
     height: 100,
   });
-  classifyDots(eligibleImage, [
+  classifyDots(mixedImage, [
     ...Array(10).fill("live"),
     ...Array(10).fill("dsc"),
     ...Array(10).fill("rubble"),
     ...Array(10).fill("sediment"),
     ...Array(10).fill("unknown_other"),
   ]);
-  const exactlyHalfUnknown = structuredClone(eligibleImage);
+  const exactlyHalfUnknown = structuredClone(mixedImage);
   exactlyHalfUnknown.relative_path = "half.png";
   exactlyHalfUnknown.name = "half.png";
   exactlyHalfUnknown.dots.forEach((dot, index) => {
     dot.class_id = index < 25 ? "unknown_other" : "live";
   });
   session.images["half.png"] = exactlyHalfUnknown;
-  const excludedImage = structuredClone(eligibleImage);
-  excludedImage.relative_path = "excluded.png";
-  excludedImage.name = "excluded.png";
-  excludedImage.dots.forEach((dot, index) => {
+  const mostlyUnknownImage = structuredClone(mixedImage);
+  mostlyUnknownImage.relative_path = "mostly-unknown.png";
+  mostlyUnknownImage.name = "mostly-unknown.png";
+  mostlyUnknownImage.dots.forEach((dot, index) => {
     dot.class_id = index < 26 ? "unknown_other" : "rubble";
   });
-  session.images["excluded.png"] = excludedImage;
+  session.images["mostly-unknown.png"] = mostlyUnknownImage;
 
-  assert.equal(imageDotSummary(eligibleImage).usable_percent.live, 25);
-  assert.equal(imageDotSummary(exactlyHalfUnknown).eligible, true);
-  assert.equal(imageDotSummary(excludedImage).eligible, false);
+  assert.equal(imageDotSummary(mixedImage).usable_percent.live, 25);
+  assert.equal(imageDotSummary(exactlyHalfUnknown).included_in_summary, true);
+  assert.equal(imageDotSummary(mostlyUnknownImage).included_in_summary, true);
+  assert.equal(imageDotSummary(mostlyUnknownImage).usable_percent.rubble, 100);
   const summary = sessionDotSummary(session);
   assert.equal(summary.complete_image_count, 3);
-  assert.equal(summary.eligible_image_count, 2);
-  assert.equal(summary.excluded_image_count, 1);
+  assert.equal(summary.counted_image_count, 3);
+  assert.equal(summary.incomplete_image_count, 0);
 });
 
-test("unknown threshold is configurable and re-scatter replaces dot coordinates once", () => {
+test("scatter preview supports unlimited replacement before acceptance", () => {
   const session = createSession("Gulf");
-  session.dot_unknown_threshold_fraction = 0.4;
   const image = ensureImage(session, {
     relative_path: "frame.png",
     name: "frame.png",
     width: 200,
     height: 100,
   });
-  classifyDots(image, [
-    ...Array(29).fill("live"),
-    ...Array(21).fill("unknown_other"),
-  ]);
-  assert.equal(imageDotSummary(image, 50, session.dot_unknown_threshold_fraction).eligible, false);
+  ensureDotQueries(image, 50, () => 0.5);
+  assert.equal(image.dot_scatter_accepted, false);
   const priorIds = image.dots.map((dot) => dot.id);
   rescatterDotQueries(image, 50, () => 0.25);
   assert.equal(image.dot_rescatter_count, 1);
+  assert.equal(image.dot_scatter_accepted, false);
   assert.equal(image.review_status, "unreviewed");
   assert.equal(image.dots.length, 50);
   assert.ok(image.dots.every((dot) => dot.class_id === null));
   assert.notDeepEqual(image.dots.map((dot) => dot.id), priorIds);
+  rescatterDotQueries(image, 50, () => 0.75);
+  assert.equal(image.dot_rescatter_count, 2);
+  assert.equal(image.dot_scatter_accepted, false);
+  assert.equal(acceptDotScatter(image, 50), true);
+  assert.equal(image.dot_scatter_accepted, true);
 });
 
 
@@ -205,7 +210,7 @@ test("CSV round-trip preserves metadata and exact stroke geometry", () => {
   session.dot_marker_diameter_fraction = 14 / DOT_MARKER_REFERENCE_SHORT_EDGE_PX;
   session.dot_marker_animation_enabled = false;
   session.dot_marker_solid_enabled = true;
-  session.dot_unknown_threshold_fraction = 0.4;
+  session.dot_show_unlabeled_markers = false;
   session.dot_hotkeys = {
     live: "q",
     dsc: "w",
@@ -222,7 +227,7 @@ test("CSV round-trip preserves metadata and exact stroke geometry", () => {
   });
   image.review_status = "reviewed";
   image.reviewed_at_utc = "2026-07-21T20:00:00.000Z";
-  image.dot_rescatter_count = 1;
+  image.dot_rescatter_count = 3;
   image.notes = "Quoted \"note\", with a newline\nand =formula text";
   image.strokes.push({
     id: "stroke_1",
@@ -249,17 +254,44 @@ test("CSV round-trip preserves metadata and exact stroke geometry", () => {
   assert.equal(restored.dot_marker_diameter_fraction, 14 / DOT_MARKER_REFERENCE_SHORT_EDGE_PX);
   assert.equal(restored.dot_marker_animation_enabled, false);
   assert.equal(restored.dot_marker_solid_enabled, true);
-  assert.equal(restored.dot_unknown_threshold_fraction, 0.4);
+  assert.equal(restored.dot_show_unlabeled_markers, false);
   assert.deepEqual(restored.dot_hotkeys, session.dot_hotkeys);
   assert.equal(restored.current_image_relative_path, "frame,001.png");
   assert.equal(restoredImage.notes, image.notes);
   assert.equal(restoredImage.review_status, "reviewed");
-  assert.equal(restoredImage.dot_rescatter_count, 1);
+  assert.equal(restoredImage.dot_scatter_accepted, true);
+  assert.equal(restoredImage.dot_rescatter_count, 3);
   assert.equal(restoredImage.strokes[0].class_id, "sediment");
   assert.deepEqual(restoredImage.strokes[0].points, image.strokes[0].points);
   assert.deepEqual(restoredImage.dots, image.dots);
   assert.match(csv, /"dataset_summary"/);
-  assert.match(csv, /"dot_eligible_for_cover"/);
+  assert.match(csv, /"dot_included_in_summary"/);
+  assert.match(csv, /"session_dot_show_unlabeled_markers"/);
+});
+
+test("older sessions infer scatter acceptance from existing classifications", () => {
+  const session = createSession("Legacy dot session");
+  const classified = ensureImage(session, {
+    relative_path: "classified.png",
+    name: "classified.png",
+    width: 100,
+    height: 80,
+  });
+  classifyDots(classified, Array(50).fill("live"));
+  const untouched = ensureImage(session, {
+    relative_path: "untouched.png",
+    name: "untouched.png",
+    width: 100,
+    height: 80,
+  });
+  ensureDotQueries(untouched, 50, () => 0.25);
+  const legacyDocument = documentForExport(session);
+  delete legacyDocument.images["classified.png"].dot_scatter_accepted;
+  delete legacyDocument.images["untouched.png"].dot_scatter_accepted;
+
+  const restored = normalizeSession(legacyDocument);
+  assert.equal(restored.images["classified.png"].dot_scatter_accepted, true);
+  assert.equal(restored.images["untouched.png"].dot_scatter_accepted, false);
 });
 
 

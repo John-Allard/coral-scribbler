@@ -2,12 +2,12 @@ import {
   CLASS_DEFINITIONS,
   DEFAULT_DOT_MARKER_DIAMETER_FRACTION,
   DEFAULT_DOT_MARKER_DIAMETER_PX,
-  DEFAULT_UNKNOWN_THRESHOLD_FRACTION,
   DOT_CLASS_DEFINITIONS,
   DOT_MARKER_REFERENCE_SHORT_EDGE_PX,
   DOTS_PER_IMAGE,
   MAX_DOT_MARKER_DIAMETER_FRACTION,
   MIN_DOT_MARKER_DIAMETER_FRACTION,
+  acceptDotScatter,
   createSession,
   documentForExport,
   dotMarkerDiameterForImage,
@@ -27,12 +27,12 @@ import {
   sessionToCsv,
   storageKeyForDataset,
   summarizeSession,
-} from "./model.mjs?v=20260730a";
+} from "./model.mjs?v=20260731b";
 import {
   describeDroppedSelection,
   describeFileSelection,
   isSupportedImageFile,
-} from "./file-selection.mjs?v=20260730a";
+} from "./file-selection.mjs?v=20260731b";
 
 const $ = (id) => document.getElementById(id);
 
@@ -56,9 +56,9 @@ const elements = {
   annotatorInput: $("annotatorInput"),
   dotSize: $("dotSize"),
   dotSizeValue: $("dotSizeValue"),
-  unknownThreshold: $("unknownThreshold"),
   animateCurrentDot: $("animateCurrentDot"),
   solidCurrentDot: $("solidCurrentDot"),
+  showUnlabeledDots: $("showUnlabeledDots"),
   resetDotHotkeysButton: $("resetDotHotkeysButton"),
   dotHotkeyReference: $("dotHotkeyReference"),
   brushSize: $("brushSize"),
@@ -85,6 +85,10 @@ const elements = {
   sedimentCount: $("sedimentCount"),
   unsureCount: $("unsureCount"),
   activeDotLabel: $("activeDotLabel"),
+  scatterReviewControls: $("scatterReviewControls"),
+  dotClassButtons: $("dotClassButtons"),
+  keepScatterButton: $("keepScatterButton"),
+  previewRescatterButton: $("previewRescatterButton"),
   dotProgressCount: $("dotProgressCount"),
   dotEligibilityText: $("dotEligibilityText"),
   dotProgressBar: $("dotProgressBar"),
@@ -93,7 +97,6 @@ const elements = {
   dotRubbleCount: $("dotRubbleCount"),
   dotSedimentCount: $("dotSedimentCount"),
   dotUnknownCount: $("dotUnknownCount"),
-  rescatterButton: $("rescatterButton"),
   reviewNextButton: $("reviewNextButton"),
   imageNotes: $("imageNotes"),
   demoButton: $("demoButton"),
@@ -193,6 +196,7 @@ function snapshotRecord(record) {
     review_status: record.review_status,
     reviewed_at_utc: record.reviewed_at_utc,
     notes: record.notes,
+    dot_scatter_accepted: record.dot_scatter_accepted === true,
     dot_rescatter_count: record.dot_rescatter_count || 0,
   });
 }
@@ -203,6 +207,7 @@ function restoreRecord(record, snapshot) {
   record.review_status = snapshot.review_status;
   record.reviewed_at_utc = snapshot.reviewed_at_utc;
   record.notes = snapshot.notes;
+  record.dot_scatter_accepted = snapshot.dot_scatter_accepted === true;
   record.dot_rescatter_count = snapshot.dot_rescatter_count || 0;
 }
 
@@ -357,6 +362,9 @@ function ensureCurrentDotQueries() {
 }
 
 function activeDot(record = currentRecord()) {
+  if (!record?.dot_scatter_accepted) {
+    return null;
+  }
   const target = state.session.dot_target_count || DOTS_PER_IMAGE;
   const dots = (record?.dots || [])
     .slice()
@@ -369,11 +377,7 @@ function activeDot(record = currentRecord()) {
 }
 
 function summarizeDots(record = currentRecord(), session = state.session) {
-  return imageDotSummary(
-    record,
-    session.dot_target_count,
-    session.dot_unknown_threshold_fraction,
-  );
+  return imageDotSummary(record, session.dot_target_count);
 }
 
 function classifyActiveDot(classId) {
@@ -401,29 +405,29 @@ function classifyActiveDot(classId) {
   }
 }
 
-function rescatterCurrentImage() {
+function acceptCurrentScatter() {
   const record = currentRecord();
-  const summary = summarizeDots(record);
-  if (
-    !record
-    || !summary.complete
-    || summary.eligible
-    || (record.dot_rescatter_count || 0) >= 1
-  ) {
+  if (!record || record.dot_scatter_accepted) {
     return;
   }
-  const confirmed = window.confirm(
-    "Replace all 50 dot locations and classifications on this image? "
-    + "This one allowed re-scatter cannot be repeated, but Undo can restore it during this visit.",
-  );
-  if (!confirmed) {
+  const before = snapshotRecord(record);
+  if (!acceptDotScatter(record, state.session.dot_target_count || DOTS_PER_IMAGE)) {
+    return;
+  }
+  commitMutation(before);
+  showToast("Scatter kept. Classify the highlighted query dot.");
+}
+
+function previewRescatterCurrentImage() {
+  const record = currentRecord();
+  if (!record || record.dot_scatter_accepted || record.dots.some((dot) => dot.class_id)) {
     return;
   }
   const before = snapshotRecord(record);
   state.selectedDotId = null;
   rescatterDotQueries(record, state.session.dot_target_count || DOTS_PER_IMAGE);
   commitMutation(before);
-  showToast("A new 50-dot sample was generated for this image.");
+  showToast(`New scatter generated (${record.dot_rescatter_count} re-scatter${record.dot_rescatter_count === 1 ? "" : "s"}).`);
 }
 
 function updateDotSettingsInterface() {
@@ -439,9 +443,6 @@ function updateDotSettingsInterface() {
   elements.dotSize.max = String(range.max);
   elements.dotSize.value = String(diameter);
   elements.dotSizeValue.textContent = `${diameter} px`;
-  elements.unknownThreshold.value = String(Math.round(
-    (state.session.dot_unknown_threshold_fraction ?? DEFAULT_UNKNOWN_THRESHOLD_FRACTION) * 100,
-  ));
   elements.animateCurrentDot.setAttribute(
     "aria-checked",
     String(state.session.dot_marker_animation_enabled !== false),
@@ -449,6 +450,10 @@ function updateDotSettingsInterface() {
   elements.solidCurrentDot.setAttribute(
     "aria-checked",
     String(state.session.dot_marker_solid_enabled === true),
+  );
+  elements.showUnlabeledDots.setAttribute(
+    "aria-checked",
+    String(state.session.dot_show_unlabeled_markers !== false),
   );
   for (const definition of DOT_CLASS_DEFINITIONS) {
     const key = state.session.dot_hotkeys[definition.id].toLocaleUpperCase();
@@ -463,16 +468,6 @@ function updateDotSettingsInterface() {
   elements.dotHotkeyReference.textContent = DOT_CLASS_DEFINITIONS
     .map(({ id }) => state.session.dot_hotkeys[id].toLocaleUpperCase())
     .join(" / ");
-}
-
-function setUnknownThreshold(value) {
-  const percent = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
-  state.session.dot_unknown_threshold_fraction = percent / 100;
-  elements.unknownThreshold.value = String(percent);
-  if (state.descriptors.length) {
-    scheduleSave();
-  }
-  updateInterface();
 }
 
 function setDotMarkerDiameter(value) {
@@ -512,6 +507,15 @@ function setDotMarkerAnimation(enabled) {
 
 function setDotMarkerSolid(enabled) {
   state.session.dot_marker_solid_enabled = Boolean(enabled);
+  updateDotSettingsInterface();
+  if (state.descriptors.length) {
+    scheduleSave();
+  }
+  render();
+}
+
+function setShowUnlabeledDots(enabled) {
+  state.session.dot_show_unlabeled_markers = Boolean(enabled);
   updateDotSettingsInterface();
   if (state.descriptors.length) {
     scheduleSave();
@@ -585,7 +589,6 @@ function setControlsEnabled(enabled) {
     elements.previousButton,
     elements.nextButton,
     elements.reviewNextButton,
-    elements.rescatterButton,
     elements.imageNotes,
   ].forEach((element) => {
     element.disabled = !enabled;
@@ -640,6 +643,7 @@ function updateInterface() {
   } else {
     const counts = imageStrokeCounts(record);
     const dotSummary = summarizeDots(record);
+    const reviewingScatter = state.annotationMode === "dot" && !record.dot_scatter_accepted;
     elements.currentImageName.textContent = descriptor.name;
     if (record.width && record.height) {
       elements.currentImageMeta.textContent = state.annotationMode === "dot"
@@ -649,11 +653,13 @@ function updateInterface() {
       elements.currentImageMeta.textContent = "Loading image dimensions";
     }
     if (state.annotationMode === "dot") {
-      if (state.selectedDotId) {
+      if (reviewingScatter) {
+        elements.reviewState.textContent = "Review scatter";
+      } else if (state.selectedDotId) {
         const selected = activeDot(record);
         elements.reviewState.textContent = `Correcting dot ${selected.index + 1}`;
       } else if (dotSummary.complete) {
-        elements.reviewState.textContent = dotSummary.eligible ? "Complete - included" : "Complete - excluded";
+        elements.reviewState.textContent = "Complete";
       } else {
         elements.reviewState.textContent = `Dot ${dotSummary.classified_count + 1} of ${dotSummary.target_count}`;
       }
@@ -671,11 +677,12 @@ function updateInterface() {
     elements.dotRubbleCount.textContent = String(dotSummary.counts.rubble);
     elements.dotSedimentCount.textContent = String(dotSummary.counts.sediment);
     elements.dotUnknownCount.textContent = String(dotSummary.counts.unknown_other);
-    if (dotSummary.complete) {
+    if (reviewingScatter) {
+      elements.dotEligibilityText.textContent = "Choose Keep or Re-scatter";
+      elements.activeDotLabel.textContent = "Review all 50 locations";
+    } else if (dotSummary.complete) {
       const unknownPercent = Math.round((dotSummary.unknown_fraction || 0) * 100);
-      elements.dotEligibilityText.textContent = dotSummary.eligible
-        ? `${unknownPercent}% unknown - included`
-        : `${unknownPercent}% unknown - excluded`;
+      elements.dotEligibilityText.textContent = `${unknownPercent}% unknown`;
       if (state.selectedDotId) {
         const selected = activeDot(record);
         elements.activeDotLabel.textContent = `Correct dot ${selected.index + 1} (${dotClassById[selected.class_id].name})`;
@@ -705,20 +712,21 @@ function updateInterface() {
   elements.undoButton.disabled = !hasImages || !history || history.undo.length === 0;
   elements.redoButton.disabled = !hasImages || !history || history.redo.length === 0;
   const currentDotSummary = record ? summarizeDots(record) : null;
-  const canRescatter = Boolean(
+  const reviewingScatter = Boolean(
     hasImages
     && state.annotationMode === "dot"
-    && currentDotSummary?.complete
-    && !currentDotSummary.eligible
-    && (record?.dot_rescatter_count || 0) < 1,
+    && record
+    && !record.dot_scatter_accepted
+    && currentDotSummary?.generated_count === currentDotSummary?.target_count
+    && currentDotSummary?.classified_count === 0
   );
-  elements.rescatterButton.disabled = !canRescatter;
-  elements.rescatterButton.textContent = (record?.dot_rescatter_count || 0) > 0
-    ? "Re-scatter already used"
-    : "Re-scatter 50 dots once";
-  elements.rescatterButton.title = canRescatter
-    ? "Replace this excluded image's dots with one new random sample."
-    : "Available once after a completed image exceeds the unknown threshold.";
+  elements.scatterReviewControls.hidden = !reviewingScatter;
+  elements.dotClassButtons.hidden = reviewingScatter;
+  elements.keepScatterButton.disabled = !reviewingScatter;
+  elements.previewRescatterButton.disabled = !reviewingScatter;
+  elements.previewRescatterButton.textContent = record?.dot_rescatter_count
+    ? `Re-scatter again (${record.dot_rescatter_count})`
+    : "Re-scatter locations";
   elements.previousButton.disabled = !hasImages || state.currentIndex <= 0;
   elements.nextButton.disabled = !hasImages || state.currentIndex >= state.descriptors.length - 1;
   updateImageList();
@@ -1181,6 +1189,27 @@ function drawDotMarker(dot, isActive = false, animationTime = performance.now(),
   ctx.restore();
 }
 
+function drawUnlabeledDotMarker(dot) {
+  const [x, y] = imageToCanvas(dot.x, dot.y);
+  const record = currentRecord();
+  const diameter = dotMarkerDiameterForImage(
+    state.session.dot_marker_diameter_fraction || DEFAULT_DOT_MARKER_DIAMETER_FRACTION,
+    record?.width,
+    record?.height,
+  );
+  const regularRadius = Math.max(1.5, diameter * state.view.scale / 2);
+  const radius = Math.min(3.25, Math.max(1.75, regularRadius * 0.58));
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x, y, radius, 0, Math.PI * 2);
+  ctx.strokeStyle = "rgba(248, 251, 249, 0.94)";
+  ctx.lineWidth = 1;
+  ctx.shadowColor = "rgba(0, 0, 0, 0.92)";
+  ctx.shadowBlur = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
 function scheduleMarkerAnimation() {
   const pulseActive = (
     state.activeQueryPulseStartedAt > 0
@@ -1229,6 +1258,8 @@ function render(animationTime = performance.now()) {
   ctx.clip();
   const record = currentRecord();
   if (state.annotationMode === "dot") {
+    const reviewingScatter = record && !record.dot_scatter_accepted;
+    const queryDot = activeDot(record);
     if (state.showOverlay) {
       for (const dot of record?.dots || []) {
         if (dot.class_id) {
@@ -1236,7 +1267,13 @@ function render(animationTime = performance.now()) {
         }
       }
     }
-    const queryDot = activeDot(record);
+    if (reviewingScatter || (state.showOverlay && state.session.dot_show_unlabeled_markers !== false)) {
+      for (const dot of record?.dots || []) {
+        if (!dot.class_id && dot.id !== queryDot?.id) {
+          drawUnlabeledDotMarker(dot);
+        }
+      }
+    }
     if (queryDot) {
       const queryIdentity = `${currentDescriptor()?.relative_path || ""}:${queryDot.id}`;
       if (queryIdentity !== state.activeQueryIdentity) {
@@ -1603,7 +1640,7 @@ function exportCsv() {
   if (state.annotationMode === "dot") {
     const summary = sessionDotSummary(state.session, descriptorPaths());
     showToast(
-      `CSV exported: ${summary.eligible_image_count} included, ${summary.excluded_image_count} excluded, ${summary.incomplete_image_count} incomplete.`,
+      `CSV exported: ${summary.complete_image_count} complete, ${summary.incomplete_image_count} incomplete.`,
       5000,
     );
   } else {
@@ -1744,7 +1781,12 @@ function handleKeyDown(event) {
     changeImage(1);
   } else if (event.key === "Enter") {
     event.preventDefault();
-    markReviewedAndNext();
+    const record = currentRecord();
+    if (state.annotationMode === "dot" && record && !record.dot_scatter_accepted) {
+      acceptCurrentScatter();
+    } else {
+      markReviewedAndNext();
+    }
   } else if (event.key === "[") {
     setBrushDiameter(state.brushDiameter - 4);
   } else if (event.key === "]") {
@@ -1760,10 +1802,6 @@ function wireEvents() {
     button.addEventListener("click", () => classifyActiveDot(button.dataset.dotClass));
   });
   elements.dotSize.addEventListener("input", () => setDotMarkerDiameter(elements.dotSize.value));
-  elements.unknownThreshold.addEventListener(
-    "change",
-    () => setUnknownThreshold(elements.unknownThreshold.value),
-  );
   elements.animateCurrentDot.addEventListener("click", (event) => {
     const enabled = event.currentTarget.getAttribute("aria-checked") !== "true";
     setDotMarkerAnimation(enabled);
@@ -1771,6 +1809,10 @@ function wireEvents() {
   elements.solidCurrentDot.addEventListener("click", (event) => {
     const enabled = event.currentTarget.getAttribute("aria-checked") !== "true";
     setDotMarkerSolid(enabled);
+  });
+  elements.showUnlabeledDots.addEventListener("click", (event) => {
+    const enabled = event.currentTarget.getAttribute("aria-checked") !== "true";
+    setShowUnlabeledDots(enabled);
   });
   elements.resetDotHotkeysButton.addEventListener("click", resetDotHotkeys);
   document.querySelectorAll("[data-dot-hotkey-input]").forEach((input) => {
@@ -1833,7 +1875,8 @@ function wireEvents() {
   elements.overlayButton.addEventListener("click", toggleOverlay);
   elements.undoButton.addEventListener("click", undo);
   elements.redoButton.addEventListener("click", redo);
-  elements.rescatterButton.addEventListener("click", rescatterCurrentImage);
+  elements.keepScatterButton.addEventListener("click", acceptCurrentScatter);
+  elements.previewRescatterButton.addEventListener("click", previewRescatterCurrentImage);
   elements.previousButton.addEventListener("click", () => changeImage(-1));
   elements.nextButton.addEventListener("click", () => changeImage(1));
   elements.reviewNextButton.addEventListener("click", markReviewedAndNext);

@@ -1,7 +1,6 @@
 export const SCHEMA_VERSION = "coral-annotations/v2";
 export const LEGACY_SCHEMA_VERSION = "coral-scribbles/v1";
 export const DOTS_PER_IMAGE = 50;
-export const DEFAULT_UNKNOWN_THRESHOLD_FRACTION = 0.5;
 export const DOT_MARKER_REFERENCE_SHORT_EDGE_PX = 720;
 export const DEFAULT_DOT_MARKER_DIAMETER_PX = 10;
 export const MIN_DOT_MARKER_DIAMETER_PX = 4;
@@ -96,7 +95,7 @@ export function createSession(datasetName = "Untitled dataset") {
     dot_marker_diameter_fraction: DEFAULT_DOT_MARKER_DIAMETER_FRACTION,
     dot_marker_animation_enabled: true,
     dot_marker_solid_enabled: false,
-    dot_unknown_threshold_fraction: DEFAULT_UNKNOWN_THRESHOLD_FRACTION,
+    dot_show_unlabeled_markers: true,
     dot_hotkeys: dotHotkeys,
     created_at_utc: now,
     updated_at_utc: now,
@@ -211,6 +210,9 @@ function cleanImageRecord(record, fallbackPath = "") {
   const dots = Array.isArray(record.dots)
     ? record.dots.map(cleanDot).filter(Boolean).sort((left, right) => left.index - right.index)
     : [];
+  const scatterAccepted = typeof record?.dot_scatter_accepted === "boolean"
+    ? record.dot_scatter_accepted
+    : dots.some((dot) => dot.class_id);
   return {
     relative_path: relativePath,
     name: String(record.name || relativePath.split("/").pop()),
@@ -221,6 +223,7 @@ function cleanImageRecord(record, fallbackPath = "") {
     review_status: reviewStatus,
     reviewed_at_utc: record.reviewed_at_utc ? String(record.reviewed_at_utc) : null,
     notes: String(record.notes || ""),
+    dot_scatter_accepted: scatterAccepted,
     dot_rescatter_count: Math.max(0, Math.round(finiteNumber(record.dot_rescatter_count, 0))),
     strokes,
     dots,
@@ -264,16 +267,7 @@ export function normalizeSession(rawDocument) {
   );
   session.dot_marker_animation_enabled = rawDocument.dot_marker_animation_enabled !== false;
   session.dot_marker_solid_enabled = rawDocument.dot_marker_solid_enabled === true;
-  session.dot_unknown_threshold_fraction = Math.max(
-    0,
-    Math.min(
-      1,
-      finiteNumber(
-        rawDocument.dot_unknown_threshold_fraction,
-        DEFAULT_UNKNOWN_THRESHOLD_FRACTION,
-      ),
-    ),
-  );
+  session.dot_show_unlabeled_markers = rawDocument.dot_show_unlabeled_markers !== false;
   session.dot_hotkeys = normalizeDotHotkeys(rawDocument.dot_hotkeys);
   session.dot_classes = DOT_CLASS_DEFINITIONS.map((item) => ({
     ...item,
@@ -310,6 +304,7 @@ export function ensureImage(session, descriptor) {
       file_size: descriptor.file_size,
       last_modified: descriptor.last_modified,
       review_status: "unreviewed",
+      dot_scatter_accepted: false,
       dot_rescatter_count: 0,
       strokes: [],
       dots: [],
@@ -378,6 +373,7 @@ export function rescatterDotQueries(
     return [];
   }
   imageRecord.dots = [];
+  imageRecord.dot_scatter_accepted = false;
   imageRecord.dot_rescatter_count = Math.max(
     0,
     Math.round(finiteNumber(imageRecord.dot_rescatter_count, 0)),
@@ -387,6 +383,15 @@ export function rescatterDotQueries(
   return ensureDotQueries(imageRecord, targetCount, random);
 }
 
+export function acceptDotScatter(imageRecord, targetCount = DOTS_PER_IMAGE) {
+  const target = Math.max(1, Math.round(finiteNumber(targetCount, DOTS_PER_IMAGE)));
+  if (!imageRecord || (imageRecord.dots || []).length < target) {
+    return false;
+  }
+  imageRecord.dot_scatter_accepted = true;
+  return true;
+}
+
 function percentage(numerator, denominator) {
   return denominator > 0 ? (numerator / denominator) * 100 : null;
 }
@@ -394,7 +399,6 @@ function percentage(numerator, denominator) {
 export function imageDotSummary(
   imageRecord,
   targetCount = DOTS_PER_IMAGE,
-  unknownThresholdFraction = DEFAULT_UNKNOWN_THRESHOLD_FRACTION,
 ) {
   const target = Math.max(1, Math.round(finiteNumber(targetCount, DOTS_PER_IMAGE)));
   const counts = Object.fromEntries(DOT_CLASS_DEFINITIONS.map(({ id }) => [id, 0]));
@@ -412,11 +416,6 @@ export function imageDotSummary(
   const knownCount = classifiedCount - unknownCount;
   const complete = dots.length >= target && classifiedCount >= target;
   const unknownFraction = percentage(unknownCount, classifiedCount);
-  const threshold = Math.max(
-    0,
-    Math.min(1, finiteNumber(unknownThresholdFraction, DEFAULT_UNKNOWN_THRESHOLD_FRACTION)),
-  );
-  const eligible = complete && unknownFraction / 100 <= threshold;
   const imagePercent = Object.fromEntries(
     DOT_CLASS_DEFINITIONS.map(({ id }) => [id, percentage(counts[id], classifiedCount)]),
   );
@@ -432,7 +431,7 @@ export function imageDotSummary(
     known_count: knownCount,
     counts,
     complete,
-    eligible,
+    included_in_summary: complete,
     unknown_fraction: unknownFraction == null ? null : unknownFraction / 100,
     image_percent: imagePercent,
     usable_percent: usablePercent,
@@ -447,23 +446,22 @@ export function sessionDotSummary(session, imagePaths = null) {
       summary: imageDotSummary(
         session.images[path],
         session.dot_target_count,
-        session.dot_unknown_threshold_fraction,
       ),
     }));
-  const eligible = imageSummaries.filter(({ summary }) => summary.eligible);
+  const counted = imageSummaries.filter(({ summary }) => summary.included_in_summary);
   const pooledCounts = Object.fromEntries(DOT_CLASS_DEFINITIONS.map(({ id }) => [id, 0]));
   const meanUsablePercent = Object.fromEntries(
     DOT_CLASS_DEFINITIONS
       .filter(({ id }) => id !== "unknown_other")
       .map(({ id }) => [id, null]),
   );
-  for (const { summary } of eligible) {
+  for (const { summary } of counted) {
     for (const classId of Object.keys(pooledCounts)) {
       pooledCounts[classId] += summary.counts[classId];
     }
   }
   for (const classId of Object.keys(meanUsablePercent)) {
-    const values = eligible
+    const values = counted
       .map(({ summary }) => summary.usable_percent[classId])
       .filter((value) => value != null);
     meanUsablePercent[classId] = values.length
@@ -482,8 +480,7 @@ export function sessionDotSummary(session, imagePaths = null) {
   return {
     image_count: imageSummaries.length,
     complete_image_count: completeCount,
-    eligible_image_count: eligible.length,
-    excluded_image_count: completeCount - eligible.length,
+    counted_image_count: counted.length,
     incomplete_image_count: imageSummaries.length - completeCount,
     pooled_counts: pooledCounts,
     pooled_image_percent: pooledImagePercent,
@@ -522,11 +519,7 @@ export function summarizeSession(session, imagePaths = null) {
         summary.class_strokes[stroke.class_id] += 1;
       }
     }
-    const dotSummary = imageDotSummary(
-      record,
-      session.dot_target_count,
-      session.dot_unknown_threshold_fraction,
-    );
+    const dotSummary = imageDotSummary(record, session.dot_target_count);
     summary.dot_complete_image_count += dotSummary.complete ? 1 : 0;
     summary.dot_classified_count += dotSummary.classified_count;
   }
@@ -580,7 +573,7 @@ export function sessionToCsv(session) {
     "session_dot_marker_diameter_fraction",
     "session_dot_marker_animation_enabled",
     "session_dot_marker_solid_enabled",
-    "session_dot_unknown_threshold_pct",
+    "session_dot_show_unlabeled_markers",
     "session_hotkey_live",
     "session_hotkey_dsc",
     "session_hotkey_rubble",
@@ -597,6 +590,7 @@ export function sessionToCsv(session) {
     "review_status",
     "reviewed_at_utc",
     "image_notes",
+    "dot_scatter_accepted",
     "dot_rescatter_count",
     "stroke_id",
     "class_id",
@@ -619,7 +613,7 @@ export function sessionToCsv(session) {
     "dot_classified_count",
     "dot_known_count",
     "dot_complete",
-    "dot_eligible_for_cover",
+    "dot_included_in_summary",
     "live_count",
     "dsc_count",
     "rubble_count",
@@ -636,8 +630,7 @@ export function sessionToCsv(session) {
     "sediment_pct_usable",
     "dataset_image_count",
     "dataset_complete_image_count",
-    "dataset_eligible_image_count",
-    "dataset_excluded_image_count",
+    "dataset_counted_image_count",
     "dataset_incomplete_image_count",
     "mean_live_pct_usable",
     "mean_dsc_pct_usable",
@@ -664,9 +657,7 @@ export function sessionToCsv(session) {
     session_dot_marker_diameter_fraction: document.dot_marker_diameter_fraction,
     session_dot_marker_animation_enabled: document.dot_marker_animation_enabled,
     session_dot_marker_solid_enabled: document.dot_marker_solid_enabled,
-    session_dot_unknown_threshold_pct: csvMetric(
-      document.dot_unknown_threshold_fraction * 100,
-    ),
+    session_dot_show_unlabeled_markers: document.dot_show_unlabeled_markers,
     session_hotkey_live: document.dot_hotkeys.live,
     session_hotkey_dsc: document.dot_hotkeys.dsc,
     session_hotkey_rubble: document.dot_hotkeys.rubble,
@@ -685,6 +676,7 @@ export function sessionToCsv(session) {
     review_status: record.review_status,
     reviewed_at_utc: record.reviewed_at_utc || "",
     image_notes: record.notes,
+    dot_scatter_accepted: record.dot_scatter_accepted,
     dot_rescatter_count: record.dot_rescatter_count,
   });
   const dotSummaryValues = (summary) => ({
@@ -693,7 +685,7 @@ export function sessionToCsv(session) {
     dot_classified_count: summary.classified_count,
     dot_known_count: summary.known_count,
     dot_complete: summary.complete,
-    dot_eligible_for_cover: summary.eligible,
+    dot_included_in_summary: summary.complete,
     live_count: summary.counts.live,
     dsc_count: summary.counts.dsc,
     rubble_count: summary.counts.rubble,
@@ -712,11 +704,7 @@ export function sessionToCsv(session) {
 
   for (const record of Object.values(document.images)) {
     const common = { ...sessionValues, ...imageValues(record) };
-    const dotSummary = imageDotSummary(
-      record,
-      document.dot_target_count,
-      document.dot_unknown_threshold_fraction,
-    );
+    const dotSummary = imageDotSummary(record, document.dot_target_count);
     rows.push(csvRow({
       record_type: "image",
       ...common,
@@ -774,8 +762,7 @@ export function sessionToCsv(session) {
     sediment_pct_usable: csvMetric(datasetSummary.pooled_usable_percent.sediment),
     dataset_image_count: datasetSummary.image_count,
     dataset_complete_image_count: datasetSummary.complete_image_count,
-    dataset_eligible_image_count: datasetSummary.eligible_image_count,
-    dataset_excluded_image_count: datasetSummary.excluded_image_count,
+    dataset_counted_image_count: datasetSummary.complete_image_count,
     dataset_incomplete_image_count: datasetSummary.incomplete_image_count,
     mean_live_pct_usable: csvMetric(datasetSummary.mean_usable_percent.live),
     mean_dsc_pct_usable: csvMetric(datasetSummary.mean_usable_percent.dsc),
@@ -944,17 +931,11 @@ export function sessionFromCsv(csvText) {
       const solidValue = valueAt(row, "session_dot_marker_solid_enabled")
         .toLocaleLowerCase();
       session.dot_marker_solid_enabled = new Set(["true", "1", "yes"]).has(solidValue);
-      session.dot_unknown_threshold_fraction = Math.max(
-        0,
-        Math.min(
-          1,
-          csvNumber(
-            valueAt(row, "session_dot_unknown_threshold_pct"),
-            "session_dot_unknown_threshold_pct",
-            DEFAULT_UNKNOWN_THRESHOLD_FRACTION * 100,
-          ) / 100,
-        ),
-      );
+      const showUnlabeledValue = valueAt(row, "session_dot_show_unlabeled_markers")
+        .toLocaleLowerCase();
+      session.dot_show_unlabeled_markers = showUnlabeledValue === ""
+        ? true
+        : !new Set(["false", "0", "no"]).has(showUnlabeledValue);
       session.dot_hotkeys = normalizeDotHotkeys({
         live: valueAt(row, "session_hotkey_live"),
         dsc: valueAt(row, "session_hotkey_dsc"),
@@ -990,6 +971,9 @@ export function sessionFromCsv(csvText) {
         review_status: valueAt(row, "review_status"),
         reviewed_at_utc: valueAt(row, "reviewed_at_utc") || null,
         notes: valueAt(row, "image_notes"),
+        dot_scatter_accepted: new Set(["true", "1", "yes"]).has(
+          valueAt(row, "dot_scatter_accepted").toLocaleLowerCase(),
+        ),
         dot_rescatter_count: csvNumber(
           valueAt(row, "dot_rescatter_count"),
           "dot_rescatter_count",
@@ -1073,6 +1057,11 @@ export function sessionFromCsv(csvText) {
     });
     if (stroke) {
       holder.record.strokes.push(stroke);
+    }
+  }
+  if (!columns.has("dot_scatter_accepted")) {
+    for (const record of Object.values(session.images)) {
+      record.dot_scatter_accepted = record.dots.some((dot) => dot.class_id);
     }
   }
   return normalizeSession(session);

@@ -16,13 +16,17 @@ uploaded to GitHub or any other server.
    folder**. Chrome may label the folder permission **Upload** even though the
    app reads the files locally and does not send them over the network. If
    folder selection is unavailable, choose **Choose individual image files**.
-4. For each highlighted query dot, press `L`, `D`, `R`, `S`, or `U` to classify
+4. Review the 50 blank dot locations shown over the image. Select **Keep
+   scatter + start** (or press `Enter`) when the sample is useful, or select
+   **Re-scatter locations** as many times as needed before starting.
+5. For each highlighted query dot, press `L`, `D`, `R`, `S`, or `U` to classify
    it as Live, DSC, Rubble, Sediment, or Unknown / other. The next dot appears
-   immediately.
-5. After all 50 dots are classified, press `Enter` to continue to the next
+   immediately. **Show remaining unlabeled dots** controls whether the other
+   blank locations remain visible while counting.
+6. After all 50 dots are classified, press `Enter` to continue to the next
    image. To correct an earlier classification, click its colored dot and press
    the correct class key. Undo and redo remain available.
-6. Select **Save session CSV** before closing or changing computers, then send
+7. Select **Save session CSV** before closing or changing computers, then send
    that CSV file to the project team.
 
 The **Dot diameter** slider scales to the current image dimensions. Its range
@@ -33,14 +37,10 @@ Blinking can be disabled, and the query dot can be switched between a hollow
 ring and a solid dot. Class hotkeys can be replaced with any five unique
 letters or numbers; **Reset** restores `L/D/R/S/U`.
 
-The Unknown / other exclusion threshold defaults to 50% and can be changed in
-the left panel. When a completed image exceeds that threshold, **Re-scatter 50
-dots once** becomes available in the review panel. Re-scattering is never
-automatic: selecting the button discards that image's first 50 locations and
-classifications, creates a completely new 50-dot sample, and restarts the
-one-dot-at-a-time count. It is limited to one retry per image and recorded in
-the CSV. If the retry also exceeds the threshold, the image remains excluded
-from dataset cover summaries.
+Re-scattering is available only during the initial preview, before any dot has
+been classified. Each re-scatter replaces all 50 locations, and the number of
+attempts is recorded in the CSV. Once the scatter is kept, classification
+begins and the accepted locations are preserved.
 
 Every dot, hotkey change, marker setting, note, and image position is autosaved
 in the current browser. After reloading the page, select the same dataset folder
@@ -66,10 +66,10 @@ downloads a timestamped backup of the current session.
 | Sediment | `S` | `3` |
 | Unknown / other | `U` | `4` |
 
-The CSV reports percentages over the whole image and percentages over usable
-area after removing Unknown / other. Completed images above the configured
-Unknown / other threshold are excluded from dataset cover summaries; the
-default is more than 50%, so exactly 50% remains included.
+The CSV reports percentages over all classified dots and percentages over
+usable area after removing Unknown / other from the denominator. Every
+completed image is included in the dataset summary; Coral Scribbler does not
+apply an automatic image-level unknown-percentage exclusion.
 
 Annotators classify the category covering the majority of the visible dot
 footprint. The exported coordinate is therefore a localized, noisy

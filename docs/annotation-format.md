@@ -15,8 +15,10 @@ points, and the dataset summary:
 - `image_relative_path` links rows to source images.
 - `dot_id` and `dot_index` identify dots; `dot_x` and `dot_y` use
   original-image pixels.
-- `dot_rescatter_count` records whether the image's one permitted replacement
-  sample was used.
+- `dot_scatter_accepted` records whether the annotator kept the displayed
+  locations and began classification.
+- `dot_rescatter_count` records how many replacement samples were generated
+  during the pre-annotation review.
 - `stroke_id` groups points into strokes, and `point_index` preserves their
   drawing order.
 - `x`, `y`, and `brush_diameter_px` use original-image pixels.
@@ -30,25 +32,25 @@ Per-image `*_pct_image` values divide each class count by all classified dots.
 Per-image `*_pct_usable` values remove `unknown_other` from the denominator, so
 Live, DSC, Rubble, and Sediment sum to 100% when known dots are present.
 
-A completed image is eligible for dataset cover summaries when its Unknown /
-other proportion is at or below `session_dot_unknown_threshold_pct`. The
-default threshold is 50%, so more than 25 of 50 dots excludes the image while
-exactly 25 remains included. Incomplete images are also omitted.
+Every completed image is included in dataset cover summaries. Incomplete images
+are omitted. Unknown / other dots affect `*_pct_image` but are removed from the
+denominator for `*_pct_usable`; there is no automatic image-level unknown
+threshold.
 
 The `dataset_summary` row reports two usable-area summaries:
 
-- `live_pct_usable` through `sediment_pct_usable` pool eligible dot counts
+- `live_pct_usable` through `sediment_pct_usable` pool completed-image dot counts
   before calculating percentages.
 - `mean_live_pct_usable` through `mean_sediment_pct_usable` are arithmetic
-  means of the eligible per-image percentages.
+  means of the completed per-image percentages.
 
 Session, image, and stroke metadata are repeated where needed so the table is
 self-contained. Important columns include:
 
 | Scope | Columns |
 | --- | --- |
-| Session | `schema_version`, `session_id`, `dataset_name`, `annotator`, `annotation_mode`, `session_current_image_relative_path`, `session_dot_target_count`, `session_dot_unknown_threshold_pct`, marker diameter/fraction, blink/solid display fields, five `session_hotkey_*` fields, timestamps |
-| Image | path, name, dimensions, file metadata, review state, notes, `dot_rescatter_count`, dot counts, image and usable-area percentages |
+| Session | `schema_version`, `session_id`, `dataset_name`, `annotator`, `annotation_mode`, `session_current_image_relative_path`, `session_dot_target_count`, marker diameter/fraction, blink/solid/unlabeled-marker display fields, five `session_hotkey_*` fields, timestamps |
+| Image | path, name, dimensions, file metadata, review state, notes, `dot_scatter_accepted`, `dot_rescatter_count`, dot counts, image and usable-area percentages |
 | Dot | `dot_id`, `dot_index`, `dot_x`, `dot_y`, `dot_class_id`, `dot_training_value`, `dot_classified_at_utc` |
 | Stroke | `stroke_id`, `class_id`, `training_value`, `brush_diameter_px`, `stroke_created_at_utc` |
 | Point | `point_index`, `x`, `y`, `elapsed_ms` |
@@ -65,8 +67,9 @@ mode, completing all target dots sets the image to reviewed. In scribble mode,
 an image may be reviewed with no strokes when it contains no useful rubble or
 sediment examples.
 
-Dot marker fraction, blink/solid preferences, and hotkey assignments are interface
-settings retained for method provenance and consistent session resumption.
+Dot marker fraction, blink/solid preferences, unlabeled-marker visibility, and
+hotkey assignments are interface settings retained for method provenance and
+consistent session resumption.
 `session_dot_marker_diameter_fraction` is relative to the image short edge;
 `session_dot_marker_diameter_px` is the equivalent diameter at a 720-pixel
 reference short edge for compatibility. These settings do not alter stored
@@ -75,6 +78,6 @@ dot-center coordinates or calculated cover.
 The annotation protocol assigns each dot to the class covering the majority of
 its visible marker footprint. Consequently, a dot is a localized noisy label:
 training code should not assume that every pixel inside the marker diameter has
-the assigned class. If an excluded image is re-scattered, the original sample
-is replaced rather than exported alongside the new sample; the nonzero
-`dot_rescatter_count` preserves that provenance.
+the assigned class. During pre-annotation review, each re-scatter replaces the
+previous sample rather than exporting both; the nonzero `dot_rescatter_count`
+preserves that provenance.
