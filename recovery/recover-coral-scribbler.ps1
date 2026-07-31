@@ -572,7 +572,7 @@ foreach ($message in $script:Messages) {
 $summaryLines.Add("")
 $summaryLines.Add("Validated Coral session candidates: $($script:Candidates.Count)")
 if ($script:Candidates.Count -gt 0) {
-    $summaryLines.Add("Send the recovered_candidates ZIP to John. The candidate with the largest classified-dot count is listed first.")
+    $summaryLines.Add("Send Coral_Scribbler_recovery_results.zip to John. The candidate with the largest classified-dot count is listed first.")
 }
 else {
     $summaryLines.Add("No intact candidate was found automatically.")
@@ -604,6 +604,13 @@ else {
     Write-Host "Do not delete this folder; it contains the forensic snapshot:"
     Write-Host "  $OutputDirectory" -ForegroundColor Cyan
     Write-Host "Send John recovery_report.txt first. Do not send the private snapshot publicly."
+}
+try {
+    Start-Process -FilePath "explorer.exe" -ArgumentList "`"$OutputDirectory`""
+    Write-Host "The recovery folder has also been opened in File Explorer."
+}
+catch {
+    Write-Host "If File Explorer did not open, find the recovery folder on your Desktop."
 }
 Write-Host ""
 Write-Host "You may now close this window. Leave the Coral Scribbler tab untouched until John confirms the result."

@@ -35,8 +35,12 @@ letters or numbers; **Reset** restores `L/D/R/S/U`.
 
 The Unknown / other exclusion threshold defaults to 50% and can be changed in
 the left panel. When a completed image exceeds that threshold, **Re-scatter 50
-dots once** replaces its sample with one new random sample. Re-scattering is
-limited to one attempt per image and recorded in the CSV.
+dots once** becomes available in the review panel. Re-scattering is never
+automatic: selecting the button discards that image's first 50 locations and
+classifications, creates a completely new 50-dot sample, and restarts the
+one-dot-at-a-time count. It is limited to one retry per image and recorded in
+the CSV. If the retry also exceeds the threshold, the image remains excluded
+from dataset cover summaries.
 
 Every dot, hotkey change, marker setting, note, and image position is autosaved
 in the current browser. After reloading the page, select the same dataset folder

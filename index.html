@@ -65,9 +65,10 @@
         </div>
         <input id="dotSize" type="range" min="4" max="16" step="1" value="10">
         <label class="threshold-control" for="unknownThreshold">
-          <span>Exclude when unknown is over</span>
+          <span>After 50 dots, exclude if unknown exceeds</span>
           <span><input id="unknownThreshold" type="number" min="0" max="100" step="1" value="50">%</span>
         </label>
+        <p class="threshold-note">An excluded image can be given one completely new 50-dot sample from its review panel.</p>
         <button id="animateCurrentDot" class="animation-toggle" type="button" role="checkbox" aria-checked="true">
           <span class="checkbox-indicator" aria-hidden="true"></span>
           <span>Blink query dot black / white</span>

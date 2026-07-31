@@ -1168,10 +1168,10 @@ function drawDotMarker(dot, isActive = false, animationTime = performance.now(),
       ctx.stroke();
     }
   } else {
-    const lineWidth = Math.min(2, Math.max(1, outerRadius * 0.25));
+    const lineWidth = Math.min(1.25, Math.max(0.75, outerRadius * 0.14));
     const drawRadius = Math.max(0.5, outerRadius - lineWidth / 2);
     ctx.fillStyle = definition.color;
-    ctx.strokeStyle = "rgba(255, 255, 255, 0.96)";
+    ctx.strokeStyle = "rgba(7, 13, 12, 0.92)";
     ctx.lineWidth = lineWidth;
     ctx.beginPath();
     ctx.arc(x, y, drawRadius, 0, Math.PI * 2);

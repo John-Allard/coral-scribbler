@@ -23,7 +23,7 @@ export const CLASS_DEFINITIONS = Object.freeze([
 ]);
 
 export const DOT_CLASS_DEFINITIONS = Object.freeze([
-  Object.freeze({ id: "live", name: "Live", training_value: 0, color: "#df5f7a", hotkey: "L" }),
+  Object.freeze({ id: "live", name: "Live", training_value: 0, color: "#f23892", hotkey: "L" }),
   Object.freeze({ id: "dsc", name: "DSC", training_value: 1, color: "#4f7fd8", hotkey: "D" }),
   Object.freeze({ id: "rubble", name: "Rubble", training_value: 2, color: "#f06b35", hotkey: "R" }),
   Object.freeze({ id: "sediment", name: "Sediment", training_value: 3, color: "#e3b52f", hotkey: "S" }),
