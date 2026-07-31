@@ -11,7 +11,7 @@
   --coral-dark: #a9402e;
   --live: #df5f7a;
   --dsc: #4f7fd8;
-  --rubble: #26966d;
+  --rubble: #f06b35;
   --rubble-soft: #d7eee5;
   --sediment: #e3b52f;
   --sediment-soft: #f8edc5;
@@ -492,6 +492,34 @@ kbd,
   accent-color: var(--coral);
 }
 
+.threshold-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  color: #43504c;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.threshold-control > span:last-child {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.threshold-control input {
+  width: 54px;
+  height: 31px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--ink);
+  background: #fffdf8;
+  font-weight: 800;
+  text-align: center;
+}
+
 .animation-toggle {
   display: flex;
   align-items: center;
@@ -773,7 +801,7 @@ body[data-annotation-mode="dot"] .image-queue-section {
 
 .dot-class-button.rubble {
   --dot-color: var(--rubble);
-  background: #213b31;
+  background: #472b20;
 }
 
 .dot-class-button.sediment {
@@ -1225,6 +1253,19 @@ body[data-annotation-mode="dot"] #annotationCanvas {
   font-size: 10px;
 }
 
+.dot-correction-note {
+  margin: 10px 0 8px;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.rescatter-button {
+  width: 100%;
+  padding-block: 7px;
+  font-size: 11px;
+}
+
 .review-button {
   width: 100%;
 }
@@ -1306,6 +1347,36 @@ body[data-annotation-mode="dot"] #annotationCanvas {
   background: #f6f0e7;
   font-size: 13px;
   line-height: 1.45;
+}
+
+.import-warning-dialog {
+  width: min(570px, calc(100vw - 30px));
+}
+
+.import-warning-details {
+  padding: 12px;
+  border-left: 3px solid var(--coral);
+  background: #f6f0e7;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  margin-top: 20px;
+}
+
+.button-danger {
+  border-color: #b64b38;
+  color: #fff;
+  background: #b64b38;
+}
+
+.button-danger:hover:not(:disabled) {
+  border-color: #8f3425;
+  background: #8f3425;
 }
 
 .shortcut-grid {

@@ -15,6 +15,8 @@ points, and the dataset summary:
 - `image_relative_path` links rows to source images.
 - `dot_id` and `dot_index` identify dots; `dot_x` and `dot_y` use
   original-image pixels.
+- `dot_rescatter_count` records whether the image's one permitted replacement
+  sample was used.
 - `stroke_id` groups points into strokes, and `point_index` preserves their
   drawing order.
 - `x`, `y`, and `brush_diameter_px` use original-image pixels.
@@ -28,9 +30,10 @@ Per-image `*_pct_image` values divide each class count by all classified dots.
 Per-image `*_pct_usable` values remove `unknown_other` from the denominator, so
 Live, DSC, Rubble, and Sediment sum to 100% when known dots are present.
 
-A completed image is eligible for dataset cover summaries when at most 25 of
-50 dots are Unknown / other. More than 50% Unknown / other excludes the image;
-exactly 50% remains included. Incomplete images are also omitted.
+A completed image is eligible for dataset cover summaries when its Unknown /
+other proportion is at or below `session_dot_unknown_threshold_pct`. The
+default threshold is 50%, so more than 25 of 50 dots excludes the image while
+exactly 25 remains included. Incomplete images are also omitted.
 
 The `dataset_summary` row reports two usable-area summaries:
 
@@ -44,8 +47,8 @@ self-contained. Important columns include:
 
 | Scope | Columns |
 | --- | --- |
-| Session | `schema_version`, `session_id`, `dataset_name`, `annotator`, `annotation_mode`, `session_current_image_relative_path`, `session_dot_target_count`, marker diameter/fraction, blink/solid display fields, five `session_hotkey_*` fields, timestamps |
-| Image | path, name, dimensions, file metadata, review state, notes, dot counts, image and usable-area percentages |
+| Session | `schema_version`, `session_id`, `dataset_name`, `annotator`, `annotation_mode`, `session_current_image_relative_path`, `session_dot_target_count`, `session_dot_unknown_threshold_pct`, marker diameter/fraction, blink/solid display fields, five `session_hotkey_*` fields, timestamps |
+| Image | path, name, dimensions, file metadata, review state, notes, `dot_rescatter_count`, dot counts, image and usable-area percentages |
 | Dot | `dot_id`, `dot_index`, `dot_x`, `dot_y`, `dot_class_id`, `dot_training_value`, `dot_classified_at_utc` |
 | Stroke | `stroke_id`, `class_id`, `training_value`, `brush_diameter_px`, `stroke_created_at_utc` |
 | Point | `point_index`, `x`, `y`, `elapsed_ms` |
@@ -68,3 +71,10 @@ settings retained for method provenance and consistent session resumption.
 `session_dot_marker_diameter_px` is the equivalent diameter at a 720-pixel
 reference short edge for compatibility. These settings do not alter stored
 dot-center coordinates or calculated cover.
+
+The annotation protocol assigns each dot to the class covering the majority of
+its visible marker footprint. Consequently, a dot is a localized noisy label:
+training code should not assume that every pixel inside the marker diameter has
+the assigned class. If an excluded image is re-scattered, the original sample
+is replaced rather than exported alongside the new sample; the nonzero
+`dot_rescatter_count` preserves that provenance.

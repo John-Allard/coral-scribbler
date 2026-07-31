@@ -1,6 +1,7 @@
 export const SCHEMA_VERSION = "coral-annotations/v2";
 export const LEGACY_SCHEMA_VERSION = "coral-scribbles/v1";
 export const DOTS_PER_IMAGE = 50;
+export const DEFAULT_UNKNOWN_THRESHOLD_FRACTION = 0.5;
 export const DOT_MARKER_REFERENCE_SHORT_EDGE_PX = 720;
 export const DEFAULT_DOT_MARKER_DIAMETER_PX = 10;
 export const MIN_DOT_MARKER_DIAMETER_PX = 4;
@@ -16,7 +17,7 @@ export const MAX_DOT_MARKER_DIAMETER_FRACTION = (
 );
 
 export const CLASS_DEFINITIONS = Object.freeze([
-  Object.freeze({ id: "rubble", name: "Rubble", training_value: 1, color: "#26966d" }),
+  Object.freeze({ id: "rubble", name: "Rubble", training_value: 1, color: "#f06b35" }),
   Object.freeze({ id: "sediment", name: "Sediment", training_value: 2, color: "#e3b52f" }),
   Object.freeze({ id: "unsure", name: "Unsure", training_value: null, color: "#36a2bd" }),
 ]);
@@ -24,7 +25,7 @@ export const CLASS_DEFINITIONS = Object.freeze([
 export const DOT_CLASS_DEFINITIONS = Object.freeze([
   Object.freeze({ id: "live", name: "Live", training_value: 0, color: "#df5f7a", hotkey: "L" }),
   Object.freeze({ id: "dsc", name: "DSC", training_value: 1, color: "#4f7fd8", hotkey: "D" }),
-  Object.freeze({ id: "rubble", name: "Rubble", training_value: 2, color: "#26966d", hotkey: "R" }),
+  Object.freeze({ id: "rubble", name: "Rubble", training_value: 2, color: "#f06b35", hotkey: "R" }),
   Object.freeze({ id: "sediment", name: "Sediment", training_value: 3, color: "#e3b52f", hotkey: "S" }),
   Object.freeze({
     id: "unknown_other",
@@ -95,6 +96,7 @@ export function createSession(datasetName = "Untitled dataset") {
     dot_marker_diameter_fraction: DEFAULT_DOT_MARKER_DIAMETER_FRACTION,
     dot_marker_animation_enabled: true,
     dot_marker_solid_enabled: false,
+    dot_unknown_threshold_fraction: DEFAULT_UNKNOWN_THRESHOLD_FRACTION,
     dot_hotkeys: dotHotkeys,
     created_at_utc: now,
     updated_at_utc: now,
@@ -219,6 +221,7 @@ function cleanImageRecord(record, fallbackPath = "") {
     review_status: reviewStatus,
     reviewed_at_utc: record.reviewed_at_utc ? String(record.reviewed_at_utc) : null,
     notes: String(record.notes || ""),
+    dot_rescatter_count: Math.max(0, Math.round(finiteNumber(record.dot_rescatter_count, 0))),
     strokes,
     dots,
   };
@@ -261,6 +264,16 @@ export function normalizeSession(rawDocument) {
   );
   session.dot_marker_animation_enabled = rawDocument.dot_marker_animation_enabled !== false;
   session.dot_marker_solid_enabled = rawDocument.dot_marker_solid_enabled === true;
+  session.dot_unknown_threshold_fraction = Math.max(
+    0,
+    Math.min(
+      1,
+      finiteNumber(
+        rawDocument.dot_unknown_threshold_fraction,
+        DEFAULT_UNKNOWN_THRESHOLD_FRACTION,
+      ),
+    ),
+  );
   session.dot_hotkeys = normalizeDotHotkeys(rawDocument.dot_hotkeys);
   session.dot_classes = DOT_CLASS_DEFINITIONS.map((item) => ({
     ...item,
@@ -297,6 +310,7 @@ export function ensureImage(session, descriptor) {
       file_size: descriptor.file_size,
       last_modified: descriptor.last_modified,
       review_status: "unreviewed",
+      dot_rescatter_count: 0,
       strokes: [],
       dots: [],
     });
@@ -355,11 +369,33 @@ export function ensureDotQueries(
   return imageRecord.dots;
 }
 
+export function rescatterDotQueries(
+  imageRecord,
+  targetCount = DOTS_PER_IMAGE,
+  random = Math.random,
+) {
+  if (!imageRecord || imageRecord.width <= 0 || imageRecord.height <= 0) {
+    return [];
+  }
+  imageRecord.dots = [];
+  imageRecord.dot_rescatter_count = Math.max(
+    0,
+    Math.round(finiteNumber(imageRecord.dot_rescatter_count, 0)),
+  ) + 1;
+  imageRecord.review_status = "unreviewed";
+  imageRecord.reviewed_at_utc = null;
+  return ensureDotQueries(imageRecord, targetCount, random);
+}
+
 function percentage(numerator, denominator) {
   return denominator > 0 ? (numerator / denominator) * 100 : null;
 }
 
-export function imageDotSummary(imageRecord, targetCount = DOTS_PER_IMAGE) {
+export function imageDotSummary(
+  imageRecord,
+  targetCount = DOTS_PER_IMAGE,
+  unknownThresholdFraction = DEFAULT_UNKNOWN_THRESHOLD_FRACTION,
+) {
   const target = Math.max(1, Math.round(finiteNumber(targetCount, DOTS_PER_IMAGE)));
   const counts = Object.fromEntries(DOT_CLASS_DEFINITIONS.map(({ id }) => [id, 0]));
   const dots = (imageRecord?.dots || [])
@@ -376,7 +412,11 @@ export function imageDotSummary(imageRecord, targetCount = DOTS_PER_IMAGE) {
   const knownCount = classifiedCount - unknownCount;
   const complete = dots.length >= target && classifiedCount >= target;
   const unknownFraction = percentage(unknownCount, classifiedCount);
-  const eligible = complete && unknownCount <= target / 2;
+  const threshold = Math.max(
+    0,
+    Math.min(1, finiteNumber(unknownThresholdFraction, DEFAULT_UNKNOWN_THRESHOLD_FRACTION)),
+  );
+  const eligible = complete && unknownFraction / 100 <= threshold;
   const imagePercent = Object.fromEntries(
     DOT_CLASS_DEFINITIONS.map(({ id }) => [id, percentage(counts[id], classifiedCount)]),
   );
@@ -402,7 +442,14 @@ export function imageDotSummary(imageRecord, targetCount = DOTS_PER_IMAGE) {
 export function sessionDotSummary(session, imagePaths = null) {
   const paths = imagePaths || Object.keys(session.images);
   const imageSummaries = paths
-    .map((path) => ({ path, summary: imageDotSummary(session.images[path], session.dot_target_count) }));
+    .map((path) => ({
+      path,
+      summary: imageDotSummary(
+        session.images[path],
+        session.dot_target_count,
+        session.dot_unknown_threshold_fraction,
+      ),
+    }));
   const eligible = imageSummaries.filter(({ summary }) => summary.eligible);
   const pooledCounts = Object.fromEntries(DOT_CLASS_DEFINITIONS.map(({ id }) => [id, 0]));
   const meanUsablePercent = Object.fromEntries(
@@ -475,7 +522,11 @@ export function summarizeSession(session, imagePaths = null) {
         summary.class_strokes[stroke.class_id] += 1;
       }
     }
-    const dotSummary = imageDotSummary(record, session.dot_target_count);
+    const dotSummary = imageDotSummary(
+      record,
+      session.dot_target_count,
+      session.dot_unknown_threshold_fraction,
+    );
     summary.dot_complete_image_count += dotSummary.complete ? 1 : 0;
     summary.dot_classified_count += dotSummary.classified_count;
   }
@@ -529,6 +580,7 @@ export function sessionToCsv(session) {
     "session_dot_marker_diameter_fraction",
     "session_dot_marker_animation_enabled",
     "session_dot_marker_solid_enabled",
+    "session_dot_unknown_threshold_pct",
     "session_hotkey_live",
     "session_hotkey_dsc",
     "session_hotkey_rubble",
@@ -545,6 +597,7 @@ export function sessionToCsv(session) {
     "review_status",
     "reviewed_at_utc",
     "image_notes",
+    "dot_rescatter_count",
     "stroke_id",
     "class_id",
     "training_value",
@@ -611,6 +664,9 @@ export function sessionToCsv(session) {
     session_dot_marker_diameter_fraction: document.dot_marker_diameter_fraction,
     session_dot_marker_animation_enabled: document.dot_marker_animation_enabled,
     session_dot_marker_solid_enabled: document.dot_marker_solid_enabled,
+    session_dot_unknown_threshold_pct: csvMetric(
+      document.dot_unknown_threshold_fraction * 100,
+    ),
     session_hotkey_live: document.dot_hotkeys.live,
     session_hotkey_dsc: document.dot_hotkeys.dsc,
     session_hotkey_rubble: document.dot_hotkeys.rubble,
@@ -629,6 +685,7 @@ export function sessionToCsv(session) {
     review_status: record.review_status,
     reviewed_at_utc: record.reviewed_at_utc || "",
     image_notes: record.notes,
+    dot_rescatter_count: record.dot_rescatter_count,
   });
   const dotSummaryValues = (summary) => ({
     dot_target_count: summary.target_count,
@@ -655,7 +712,11 @@ export function sessionToCsv(session) {
 
   for (const record of Object.values(document.images)) {
     const common = { ...sessionValues, ...imageValues(record) };
-    const dotSummary = imageDotSummary(record, document.dot_target_count);
+    const dotSummary = imageDotSummary(
+      record,
+      document.dot_target_count,
+      document.dot_unknown_threshold_fraction,
+    );
     rows.push(csvRow({
       record_type: "image",
       ...common,
@@ -883,6 +944,17 @@ export function sessionFromCsv(csvText) {
       const solidValue = valueAt(row, "session_dot_marker_solid_enabled")
         .toLocaleLowerCase();
       session.dot_marker_solid_enabled = new Set(["true", "1", "yes"]).has(solidValue);
+      session.dot_unknown_threshold_fraction = Math.max(
+        0,
+        Math.min(
+          1,
+          csvNumber(
+            valueAt(row, "session_dot_unknown_threshold_pct"),
+            "session_dot_unknown_threshold_pct",
+            DEFAULT_UNKNOWN_THRESHOLD_FRACTION * 100,
+          ) / 100,
+        ),
+      );
       session.dot_hotkeys = normalizeDotHotkeys({
         live: valueAt(row, "session_hotkey_live"),
         dsc: valueAt(row, "session_hotkey_dsc"),
@@ -918,6 +990,11 @@ export function sessionFromCsv(csvText) {
         review_status: valueAt(row, "review_status"),
         reviewed_at_utc: valueAt(row, "reviewed_at_utc") || null,
         notes: valueAt(row, "image_notes"),
+        dot_rescatter_count: csvNumber(
+          valueAt(row, "dot_rescatter_count"),
+          "dot_rescatter_count",
+          0,
+        ),
         strokes: [],
         dots: [],
       }, relativePath);

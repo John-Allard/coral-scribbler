@@ -20,7 +20,8 @@ uploaded to GitHub or any other server.
    it as Live, DSC, Rubble, Sediment, or Unknown / other. The next dot appears
    immediately.
 5. After all 50 dots are classified, press `Enter` to continue to the next
-   image. Undo and redo remain available.
+   image. To correct an earlier classification, click its colored dot and press
+   the correct class key. Undo and redo remain available.
 6. Select **Save session CSV** before closing or changing computers, then send
    that CSV file to the project team.
 
@@ -32,6 +33,11 @@ Blinking can be disabled, and the query dot can be switched between a hollow
 ring and a solid dot. Class hotkeys can be replaced with any five unique
 letters or numbers; **Reset** restores `L/D/R/S/U`.
 
+The Unknown / other exclusion threshold defaults to 50% and can be changed in
+the left panel. When a completed image exceeds that threshold, **Re-scatter 50
+dots once** replaces its sample with one new random sample. Re-scattering is
+limited to one attempt per image and recorded in the CSV.
+
 Every dot, hotkey change, marker setting, note, and image position is autosaved
 in the current browser. After reloading the page, select the same dataset folder
 again; the app restores the matching browser backup and returns to the last
@@ -41,7 +47,10 @@ without that folder selection.
 The browser backup belongs to one browser profile on one device and can be
 lost if site data is cleared or private browsing ends. **Save session CSV** is
 the durable research record. To continue one, select the same folder or files
-and then use **Resume session CSV**.
+and then use **Resume session CSV**. If a selected CSV has less progress,
+older timestamps, or mismatched image paths, the app keeps the current session
+unless the user explicitly confirms replacement. Confirmed replacement first
+downloads a timestamped backup of the current session.
 
 ## Dot Counts
 
@@ -54,9 +63,14 @@ and then use **Resume session CSV**.
 | Unknown / other | `U` | `4` |
 
 The CSV reports percentages over the whole image and percentages over usable
-area after removing Unknown / other. Completed images with more than 50%
-Unknown / other are excluded from dataset cover summaries; exactly 50% remains
-included.
+area after removing Unknown / other. Completed images above the configured
+Unknown / other threshold are excluded from dataset cover summaries; the
+default is more than 50%, so exactly 50% remains included.
+
+Annotators classify the category covering the majority of the visible dot
+footprint. The exported coordinate is therefore a localized, noisy
+majority-footprint label, not a claim that every pixel covered by the marker
+belongs to that class.
 
 Optional **Scribble** mode remains available for collecting spatial
 rubble/sediment examples. Dot coordinates, stroke coordinates, and brush

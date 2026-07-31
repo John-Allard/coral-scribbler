@@ -2,6 +2,7 @@ import {
   CLASS_DEFINITIONS,
   DEFAULT_DOT_MARKER_DIAMETER_FRACTION,
   DEFAULT_DOT_MARKER_DIAMETER_PX,
+  DEFAULT_UNKNOWN_THRESHOLD_FRACTION,
   DOT_CLASS_DEFINITIONS,
   DOT_MARKER_REFERENCE_SHORT_EDGE_PX,
   DOTS_PER_IMAGE,
@@ -20,17 +21,18 @@ import {
   normalizeDotHotkeys,
   normalizeSession,
   randomId,
+  rescatterDotQueries,
   sessionDotSummary,
   sessionFromCsv,
   sessionToCsv,
   storageKeyForDataset,
   summarizeSession,
-} from "./model.mjs?v=20260728g";
+} from "./model.mjs?v=20260730a";
 import {
   describeDroppedSelection,
   describeFileSelection,
   isSupportedImageFile,
-} from "./file-selection.mjs?v=20260728g";
+} from "./file-selection.mjs?v=20260730a";
 
 const $ = (id) => document.getElementById(id);
 
@@ -49,9 +51,12 @@ const elements = {
   exportCsvButton: $("exportCsvButton"),
   helpButton: $("helpButton"),
   helpDialog: $("helpDialog"),
+  importWarningDialog: $("importWarningDialog"),
+  importWarningDetails: $("importWarningDetails"),
   annotatorInput: $("annotatorInput"),
   dotSize: $("dotSize"),
   dotSizeValue: $("dotSizeValue"),
+  unknownThreshold: $("unknownThreshold"),
   animateCurrentDot: $("animateCurrentDot"),
   solidCurrentDot: $("solidCurrentDot"),
   resetDotHotkeysButton: $("resetDotHotkeysButton"),
@@ -88,6 +93,7 @@ const elements = {
   dotRubbleCount: $("dotRubbleCount"),
   dotSedimentCount: $("dotSedimentCount"),
   dotUnknownCount: $("dotUnknownCount"),
+  rescatterButton: $("rescatterButton"),
   reviewNextButton: $("reviewNextButton"),
   imageNotes: $("imageNotes"),
   demoButton: $("demoButton"),
@@ -127,6 +133,7 @@ const state = {
   activeQueryIdentity: null,
   activeQueryPulseStartedAt: 0,
   activeQueryPulseTimer: null,
+  selectedDotId: null,
   objectUrls: [],
 };
 
@@ -186,6 +193,7 @@ function snapshotRecord(record) {
     review_status: record.review_status,
     reviewed_at_utc: record.reviewed_at_utc,
     notes: record.notes,
+    dot_rescatter_count: record.dot_rescatter_count || 0,
   });
 }
 
@@ -195,6 +203,7 @@ function restoreRecord(record, snapshot) {
   record.review_status = snapshot.review_status;
   record.reviewed_at_utc = snapshot.reviewed_at_utc;
   record.notes = snapshot.notes;
+  record.dot_rescatter_count = snapshot.dot_rescatter_count || 0;
 }
 
 function historyForCurrentImage() {
@@ -229,6 +238,7 @@ function undo() {
   if (!record || !history || history.undo.length === 0) {
     return;
   }
+  state.selectedDotId = null;
   history.redo.push(snapshotRecord(record));
   restoreRecord(record, history.undo.pop());
   commitWithoutHistory();
@@ -240,6 +250,7 @@ function redo() {
   if (!record || !history || history.redo.length === 0) {
     return;
   }
+  state.selectedDotId = null;
   history.undo.push(snapshotRecord(record));
   restoreRecord(record, history.redo.pop());
   commitWithoutHistory();
@@ -320,7 +331,7 @@ function setAnnotationMode(mode, { save = true } = {}) {
   state.session.annotation_mode = mode;
   document.body.dataset.annotationMode = mode;
   elements.overlayLabel.textContent = mode === "dot" ? "Markers" : "Overlay";
-  document.querySelectorAll("[data-annotation-mode]").forEach((button) => {
+  document.querySelectorAll("button[data-annotation-mode]").forEach((button) => {
     const active = button.dataset.annotationMode === mode;
     button.classList.toggle("active", active);
     button.setAttribute("aria-pressed", String(active));
@@ -347,11 +358,22 @@ function ensureCurrentDotQueries() {
 
 function activeDot(record = currentRecord()) {
   const target = state.session.dot_target_count || DOTS_PER_IMAGE;
-  return (record?.dots || [])
+  const dots = (record?.dots || [])
     .slice()
     .sort((left, right) => left.index - right.index)
-    .slice(0, target)
-    .find((dot) => !dot.class_id) || null;
+    .slice(0, target);
+  const selected = state.selectedDotId
+    ? dots.find((dot) => dot.id === state.selectedDotId && dot.class_id)
+    : null;
+  return selected || dots.find((dot) => !dot.class_id) || null;
+}
+
+function summarizeDots(record = currentRecord(), session = state.session) {
+  return imageDotSummary(
+    record,
+    session.dot_target_count,
+    session.dot_unknown_threshold_fraction,
+  );
 }
 
 function classifyActiveDot(classId) {
@@ -363,16 +385,45 @@ function classifyActiveDot(classId) {
   if (!record || !dot) {
     return;
   }
+  const correcting = dot.id === state.selectedDotId;
   const before = snapshotRecord(record);
   dot.class_id = classId;
   dot.classified_at_utc = new Date().toISOString();
-  const summary = imageDotSummary(record, state.session.dot_target_count);
+  state.selectedDotId = null;
+  const summary = summarizeDots(record);
   record.review_status = summary.complete ? "reviewed" : "in_progress";
   record.reviewed_at_utc = summary.complete ? new Date().toISOString() : null;
   commitMutation(before);
-  if (summary.complete) {
+  if (correcting) {
+    showToast(`Dot ${dot.index + 1} changed to ${dotClassById[classId].name}.`);
+  } else if (summary.complete) {
     showToast("Image complete. Press Enter for the next image.");
   }
+}
+
+function rescatterCurrentImage() {
+  const record = currentRecord();
+  const summary = summarizeDots(record);
+  if (
+    !record
+    || !summary.complete
+    || summary.eligible
+    || (record.dot_rescatter_count || 0) >= 1
+  ) {
+    return;
+  }
+  const confirmed = window.confirm(
+    "Replace all 50 dot locations and classifications on this image? "
+    + "This one allowed re-scatter cannot be repeated, but Undo can restore it during this visit.",
+  );
+  if (!confirmed) {
+    return;
+  }
+  const before = snapshotRecord(record);
+  state.selectedDotId = null;
+  rescatterDotQueries(record, state.session.dot_target_count || DOTS_PER_IMAGE);
+  commitMutation(before);
+  showToast("A new 50-dot sample was generated for this image.");
 }
 
 function updateDotSettingsInterface() {
@@ -388,6 +439,9 @@ function updateDotSettingsInterface() {
   elements.dotSize.max = String(range.max);
   elements.dotSize.value = String(diameter);
   elements.dotSizeValue.textContent = `${diameter} px`;
+  elements.unknownThreshold.value = String(Math.round(
+    (state.session.dot_unknown_threshold_fraction ?? DEFAULT_UNKNOWN_THRESHOLD_FRACTION) * 100,
+  ));
   elements.animateCurrentDot.setAttribute(
     "aria-checked",
     String(state.session.dot_marker_animation_enabled !== false),
@@ -409,6 +463,16 @@ function updateDotSettingsInterface() {
   elements.dotHotkeyReference.textContent = DOT_CLASS_DEFINITIONS
     .map(({ id }) => state.session.dot_hotkeys[id].toLocaleUpperCase())
     .join(" / ");
+}
+
+function setUnknownThreshold(value) {
+  const percent = Math.max(0, Math.min(100, Math.round(Number(value) || 0)));
+  state.session.dot_unknown_threshold_fraction = percent / 100;
+  elements.unknownThreshold.value = String(percent);
+  if (state.descriptors.length) {
+    scheduleSave();
+  }
+  updateInterface();
 }
 
 function setDotMarkerDiameter(value) {
@@ -521,6 +585,7 @@ function setControlsEnabled(enabled) {
     elements.previousButton,
     elements.nextButton,
     elements.reviewNextButton,
+    elements.rescatterButton,
     elements.imageNotes,
   ].forEach((element) => {
     element.disabled = !enabled;
@@ -574,7 +639,7 @@ function updateInterface() {
     elements.imageNotes.value = "";
   } else {
     const counts = imageStrokeCounts(record);
-    const dotSummary = imageDotSummary(record, state.session.dot_target_count);
+    const dotSummary = summarizeDots(record);
     elements.currentImageName.textContent = descriptor.name;
     if (record.width && record.height) {
       elements.currentImageMeta.textContent = state.annotationMode === "dot"
@@ -584,7 +649,10 @@ function updateInterface() {
       elements.currentImageMeta.textContent = "Loading image dimensions";
     }
     if (state.annotationMode === "dot") {
-      if (dotSummary.complete) {
+      if (state.selectedDotId) {
+        const selected = activeDot(record);
+        elements.reviewState.textContent = `Correcting dot ${selected.index + 1}`;
+      } else if (dotSummary.complete) {
         elements.reviewState.textContent = dotSummary.eligible ? "Complete - included" : "Complete - excluded";
       } else {
         elements.reviewState.textContent = `Dot ${dotSummary.classified_count + 1} of ${dotSummary.target_count}`;
@@ -608,11 +676,21 @@ function updateInterface() {
       elements.dotEligibilityText.textContent = dotSummary.eligible
         ? `${unknownPercent}% unknown - included`
         : `${unknownPercent}% unknown - excluded`;
-      elements.activeDotLabel.textContent = "Image complete - press Enter";
+      if (state.selectedDotId) {
+        const selected = activeDot(record);
+        elements.activeDotLabel.textContent = `Correct dot ${selected.index + 1} (${dotClassById[selected.class_id].name})`;
+      } else {
+        elements.activeDotLabel.textContent = "Image complete - click a dot to correct it";
+      }
     } else {
       const remaining = dotSummary.target_count - dotSummary.classified_count;
       elements.dotEligibilityText.textContent = `${remaining} remaining`;
-      elements.activeDotLabel.textContent = `Dot ${dotSummary.classified_count + 1} of ${dotSummary.target_count}`;
+      if (state.selectedDotId) {
+        const selected = activeDot(record);
+        elements.activeDotLabel.textContent = `Correct dot ${selected.index + 1} (${dotClassById[selected.class_id].name})`;
+      } else {
+        elements.activeDotLabel.textContent = `Dot ${dotSummary.classified_count + 1} of ${dotSummary.target_count}`;
+      }
     }
     if (document.activeElement !== elements.imageNotes) {
       elements.imageNotes.value = record.notes || "";
@@ -626,6 +704,21 @@ function updateInterface() {
   const history = historyForCurrentImage();
   elements.undoButton.disabled = !hasImages || !history || history.undo.length === 0;
   elements.redoButton.disabled = !hasImages || !history || history.redo.length === 0;
+  const currentDotSummary = record ? summarizeDots(record) : null;
+  const canRescatter = Boolean(
+    hasImages
+    && state.annotationMode === "dot"
+    && currentDotSummary?.complete
+    && !currentDotSummary.eligible
+    && (record?.dot_rescatter_count || 0) < 1,
+  );
+  elements.rescatterButton.disabled = !canRescatter;
+  elements.rescatterButton.textContent = (record?.dot_rescatter_count || 0) > 0
+    ? "Re-scatter already used"
+    : "Re-scatter 50 dots once";
+  elements.rescatterButton.title = canRescatter
+    ? "Replace this excluded image's dots with one new random sample."
+    : "Available once after a completed image exceeds the unknown threshold.";
   elements.previousButton.disabled = !hasImages || state.currentIndex <= 0;
   elements.nextButton.disabled = !hasImages || state.currentIndex >= state.descriptors.length - 1;
   updateImageList();
@@ -652,7 +745,7 @@ function updateImageList() {
   for (const { descriptor, index } of matches) {
     const record = state.session.images[descriptor.relative_path];
     const counts = imageStrokeCounts(record);
-    const dotSummary = imageDotSummary(record, state.session.dot_target_count);
+    const dotSummary = summarizeDots(record);
     let queueState = record?.review_status || "unreviewed";
     let queueCount = counts.total || "";
     if (state.annotationMode === "dot") {
@@ -703,6 +796,7 @@ async function setDataset(descriptors, datasetName, session, options = {}) {
   state.imageElement = null;
   state.currentIndex = -1;
   state.activeQueryIdentity = null;
+  state.selectedDotId = null;
   clearActiveQueryPulse();
 
   for (const descriptor of state.descriptors) {
@@ -721,10 +815,7 @@ async function setDataset(descriptors, datasetName, session, options = {}) {
     );
     const firstUnreviewed = state.annotationMode === "dot"
       ? state.descriptors.findIndex((descriptor) => (
-        !imageDotSummary(
-          state.session.images[descriptor.relative_path],
-          state.session.dot_target_count,
-        ).complete
+        !summarizeDots(state.session.images[descriptor.relative_path]).complete
       ))
       : state.descriptors.findIndex((descriptor) => (
         state.session.images[descriptor.relative_path]?.review_status !== "reviewed"
@@ -893,6 +984,7 @@ async function loadImage(index) {
   cancelPointerOperation(true);
   const token = ++state.imageLoadToken;
   state.currentIndex = index;
+  state.selectedDotId = null;
   elements.loadingState.hidden = false;
   updateInterface();
 
@@ -1222,6 +1314,36 @@ function insideImage(imageX, imageY) {
   );
 }
 
+function selectClassifiedDotAt(canvasX, canvasY) {
+  const record = currentRecord();
+  if (!record || !state.showOverlay) {
+    return false;
+  }
+  const diameter = dotMarkerDiameterForImage(
+    state.session.dot_marker_diameter_fraction || DEFAULT_DOT_MARKER_DIAMETER_FRACTION,
+    record.width,
+    record.height,
+  );
+  const hitRadius = Math.max(10, diameter * state.view.scale / 2 + 5);
+  let nearest = null;
+  let nearestDistance = Infinity;
+  for (const dot of record.dots || []) {
+    if (!dot.class_id) {
+      continue;
+    }
+    const [dotX, dotY] = imageToCanvas(dot.x, dot.y);
+    const distance = Math.hypot(canvasX - dotX, canvasY - dotY);
+    if (distance <= hitRadius && distance < nearestDistance) {
+      nearest = dot;
+      nearestDistance = distance;
+    }
+  }
+  state.selectedDotId = nearest?.id || null;
+  updateInterface();
+  render();
+  return Boolean(nearest);
+}
+
 function addStrokePoint(stroke, imageX, imageY, force = false) {
   const points = stroke.points;
   const elapsed = performance.now() - stroke.startedAtPerformance;
@@ -1290,6 +1412,10 @@ function beginPointer(event) {
     return;
   }
   if (state.annotationMode === "dot") {
+    if (event.button === 0) {
+      event.preventDefault();
+      selectClassifiedDotAt(canvasX, canvasY);
+    }
     return;
   }
   if (event.button !== 0) {
@@ -1418,7 +1544,7 @@ function markReviewedAndNext() {
     return;
   }
   if (state.annotationMode === "dot") {
-    const summary = imageDotSummary(record, state.session.dot_target_count);
+    const summary = summarizeDots(record);
     if (!summary.complete) {
       showToast(`Classify ${summary.target_count - summary.classified_count} more dots before continuing.`);
       return;
@@ -1485,10 +1611,66 @@ function exportCsv() {
   }
 }
 
+function sessionImportComparison(imported) {
+  const paths = descriptorPaths();
+  const current = summarizeSession(state.session, paths);
+  const candidate = summarizeSession(imported, paths);
+  const candidatePaths = new Set(Object.keys(imported.images));
+  const matchingPathCount = paths.filter((path) => candidatePaths.has(path)).length;
+  const currentUpdated = Date.parse(state.session.updated_at_utc || "") || 0;
+  const candidateUpdated = Date.parse(imported.updated_at_utc || "") || 0;
+  const sameSession = imported.session_id === state.session.session_id;
+  const losesProgress = (
+    candidate.dot_classified_count < current.dot_classified_count
+    || candidate.dot_complete_image_count < current.dot_complete_image_count
+  );
+  const olderSameSession = sameSession && candidateUpdated < currentUpdated;
+  const pathMismatch = paths.length > 0 && matchingPathCount < paths.length;
+  return {
+    shouldWarn: losesProgress || olderSameSession || pathMismatch,
+    details: [
+      `Current browser session: ${current.dot_complete_image_count} completed images, ${current.dot_classified_count} classified dots.`,
+      `Selected CSV on this folder: ${candidate.dot_complete_image_count} completed images, ${candidate.dot_classified_count} classified dots.`,
+      `Matching image paths: ${matchingPathCount} of ${paths.length}.`,
+    ].join(" "),
+  };
+}
+
+function requestImportReplacement(comparison) {
+  elements.importWarningDetails.textContent = comparison.details;
+  elements.importWarningDialog.returnValue = "keep";
+  elements.importWarningDialog.showModal();
+  return new Promise((resolve) => {
+    elements.importWarningDialog.addEventListener(
+      "close",
+      () => resolve(elements.importWarningDialog.returnValue === "replace"),
+      { once: true },
+    );
+  });
+}
+
+function downloadPreImportBackup() {
+  const timestamp = new Date().toISOString().replaceAll(":", "-").replace(/\.\d{3}Z$/, "Z");
+  downloadBlob(
+    new Blob([sessionToCsv(state.session)], { type: "text/csv;charset=utf-8" }),
+    `${exportBaseName().replace(/_\d{4}-\d{2}-\d{2}$/, "")}_before_resume_${timestamp}.csv`,
+  );
+}
+
 async function importCsvFile(file) {
   try {
     const imported = sessionFromCsv(await file.text());
+    const comparison = sessionImportComparison(imported);
+    if (comparison.shouldWarn) {
+      const replace = await requestImportReplacement(comparison);
+      if (!replace) {
+        showToast("Current browser session kept. The selected CSV was not loaded.");
+        return;
+      }
+      downloadPreImportBackup();
+    }
     state.session = imported;
+    state.selectedDotId = null;
     for (const descriptor of state.descriptors) {
       ensureImage(state.session, descriptor);
     }
@@ -1571,13 +1753,17 @@ function handleKeyDown(event) {
 }
 
 function wireEvents() {
-  document.querySelectorAll("[data-annotation-mode]").forEach((button) => {
+  document.querySelectorAll("button[data-annotation-mode]").forEach((button) => {
     button.addEventListener("click", () => setAnnotationMode(button.dataset.annotationMode));
   });
   document.querySelectorAll("[data-dot-class]").forEach((button) => {
     button.addEventListener("click", () => classifyActiveDot(button.dataset.dotClass));
   });
   elements.dotSize.addEventListener("input", () => setDotMarkerDiameter(elements.dotSize.value));
+  elements.unknownThreshold.addEventListener(
+    "change",
+    () => setUnknownThreshold(elements.unknownThreshold.value),
+  );
   elements.animateCurrentDot.addEventListener("click", (event) => {
     const enabled = event.currentTarget.getAttribute("aria-checked") !== "true";
     setDotMarkerAnimation(enabled);
@@ -1647,6 +1833,7 @@ function wireEvents() {
   elements.overlayButton.addEventListener("click", toggleOverlay);
   elements.undoButton.addEventListener("click", undo);
   elements.redoButton.addEventListener("click", redo);
+  elements.rescatterButton.addEventListener("click", rescatterCurrentImage);
   elements.previousButton.addEventListener("click", () => changeImage(-1));
   elements.nextButton.addEventListener("click", () => changeImage(1));
   elements.reviewNextButton.addEventListener("click", markReviewedAndNext);

@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#f2ede2">
   <title>Coral Scribbler</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%23dc684d'/%3E%3Cpath d='M15 26V7m0 7-6-5m6 9 7-6' fill='none' stroke='white' stroke-width='3.2' stroke-linecap='round'/%3E%3C/svg%3E">
-  <link rel="stylesheet" href="styles.css?v=20260728h">
+  <link rel="stylesheet" href="styles.css?v=20260730a">
 </head>
 <body data-annotation-mode="dot">
   <div class="app-shell">
@@ -64,6 +64,10 @@
           <output id="dotSizeValue" for="dotSize">10 px</output>
         </div>
         <input id="dotSize" type="range" min="4" max="16" step="1" value="10">
+        <label class="threshold-control" for="unknownThreshold">
+          <span>Exclude when unknown is over</span>
+          <span><input id="unknownThreshold" type="number" min="0" max="100" step="1" value="50">%</span>
+        </label>
         <button id="animateCurrentDot" class="animation-toggle" type="button" role="checkbox" aria-checked="true">
           <span class="checkbox-indicator" aria-hidden="true"></span>
           <span>Blink query dot black / white</span>
@@ -237,6 +241,8 @@
             <div><span class="count-dot sediment"></span><strong id="dotSedimentCount">0</strong><small>sediment</small></div>
             <div><span class="count-dot unknown-other"></span><strong id="dotUnknownCount">0</strong><small>unknown</small></div>
           </div>
+          <p class="dot-correction-note">To correct a completed point, click its colored dot and assign the new class.</p>
+          <button id="rescatterButton" class="button rescatter-button" type="button" disabled>Re-scatter 50 dots once</button>
         </div>
         <button id="reviewNextButton" class="button button-primary review-button" data-mode-panel="scribble" type="button" disabled>Mark reviewed + next</button>
         <p class="review-note" data-mode-panel="scribble">An image can be reviewed with no strokes if it contains no useful rubble or sediment examples.</p>
@@ -310,7 +316,24 @@
     </form>
   </dialog>
 
+  <dialog id="importWarningDialog" class="help-dialog import-warning-dialog">
+    <form method="dialog">
+      <div class="dialog-heading">
+        <div>
+          <span class="eyebrow">Protect current work</span>
+          <h2>This CSV may replace newer progress</h2>
+        </div>
+      </div>
+      <p id="importWarningDetails" class="import-warning-details"></p>
+      <p>If you replace it anyway, Coral Scribbler will first download a timestamped backup of the current session.</p>
+      <div class="dialog-actions">
+        <button class="button button-primary" value="keep">Keep current session</button>
+        <button class="button button-danger" value="replace">Download backup and replace</button>
+      </div>
+    </form>
+  </dialog>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
-  <script type="module" src="app.mjs?v=20260728g"></script>
+  <script type="module" src="app.mjs?v=20260730a"></script>
 </body>
 </html>

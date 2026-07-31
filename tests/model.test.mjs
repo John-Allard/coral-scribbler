@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import {
   DEFAULT_DOT_MARKER_DIAMETER_FRACTION,
   DEFAULT_DOT_MARKER_DIAMETER_PX,
+  DEFAULT_UNKNOWN_THRESHOLD_FRACTION,
   DOT_MARKER_REFERENCE_SHORT_EDGE_PX,
   DOTS_PER_IMAGE,
   LEGACY_SCHEMA_VERSION,
@@ -18,6 +19,7 @@ import {
   normalizeDotHotkey,
   normalizeDotHotkeys,
   normalizeSession,
+  rescatterDotQueries,
   sessionDotSummary,
   sessionFromCsv,
   sessionToCsv,
@@ -84,6 +86,7 @@ test("new sessions default to 50 uniformly sampled dot queries", () => {
   assert.equal(session.dot_marker_diameter_fraction, DEFAULT_DOT_MARKER_DIAMETER_FRACTION);
   assert.equal(session.dot_marker_animation_enabled, true);
   assert.equal(session.dot_marker_solid_enabled, false);
+  assert.equal(session.dot_unknown_threshold_fraction, DEFAULT_UNKNOWN_THRESHOLD_FRACTION);
   assert.deepEqual(session.dot_hotkeys, {
     live: "l",
     dsc: "d",
@@ -171,6 +174,29 @@ test("dot summaries apply the strict over-50-percent unknown exclusion", () => {
   assert.equal(summary.excluded_image_count, 1);
 });
 
+test("unknown threshold is configurable and re-scatter replaces dot coordinates once", () => {
+  const session = createSession("Gulf");
+  session.dot_unknown_threshold_fraction = 0.4;
+  const image = ensureImage(session, {
+    relative_path: "frame.png",
+    name: "frame.png",
+    width: 200,
+    height: 100,
+  });
+  classifyDots(image, [
+    ...Array(29).fill("live"),
+    ...Array(21).fill("unknown_other"),
+  ]);
+  assert.equal(imageDotSummary(image, 50, session.dot_unknown_threshold_fraction).eligible, false);
+  const priorIds = image.dots.map((dot) => dot.id);
+  rescatterDotQueries(image, 50, () => 0.25);
+  assert.equal(image.dot_rescatter_count, 1);
+  assert.equal(image.review_status, "unreviewed");
+  assert.equal(image.dots.length, 50);
+  assert.ok(image.dots.every((dot) => dot.class_id === null));
+  assert.notDeepEqual(image.dots.map((dot) => dot.id), priorIds);
+});
+
 
 test("CSV round-trip preserves metadata and exact stroke geometry", () => {
   const session = createSession("Gulf, pilot");
@@ -179,6 +205,7 @@ test("CSV round-trip preserves metadata and exact stroke geometry", () => {
   session.dot_marker_diameter_fraction = 14 / DOT_MARKER_REFERENCE_SHORT_EDGE_PX;
   session.dot_marker_animation_enabled = false;
   session.dot_marker_solid_enabled = true;
+  session.dot_unknown_threshold_fraction = 0.4;
   session.dot_hotkeys = {
     live: "q",
     dsc: "w",
@@ -195,6 +222,7 @@ test("CSV round-trip preserves metadata and exact stroke geometry", () => {
   });
   image.review_status = "reviewed";
   image.reviewed_at_utc = "2026-07-21T20:00:00.000Z";
+  image.dot_rescatter_count = 1;
   image.notes = "Quoted \"note\", with a newline\nand =formula text";
   image.strokes.push({
     id: "stroke_1",
@@ -221,10 +249,12 @@ test("CSV round-trip preserves metadata and exact stroke geometry", () => {
   assert.equal(restored.dot_marker_diameter_fraction, 14 / DOT_MARKER_REFERENCE_SHORT_EDGE_PX);
   assert.equal(restored.dot_marker_animation_enabled, false);
   assert.equal(restored.dot_marker_solid_enabled, true);
+  assert.equal(restored.dot_unknown_threshold_fraction, 0.4);
   assert.deepEqual(restored.dot_hotkeys, session.dot_hotkeys);
   assert.equal(restored.current_image_relative_path, "frame,001.png");
   assert.equal(restoredImage.notes, image.notes);
   assert.equal(restoredImage.review_status, "reviewed");
+  assert.equal(restoredImage.dot_rescatter_count, 1);
   assert.equal(restoredImage.strokes[0].class_id, "sediment");
   assert.deepEqual(restoredImage.strokes[0].points, image.strokes[0].points);
   assert.deepEqual(restoredImage.dots, image.dots);
