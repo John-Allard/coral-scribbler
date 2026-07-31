@@ -492,6 +492,41 @@ kbd,
   accent-color: var(--coral);
 }
 
+.threshold-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 12px;
+  color: #43504c;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.threshold-control > span:last-child {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.threshold-control input {
+  width: 54px;
+  height: 31px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--ink);
+  background: #fffdf8;
+  font-weight: 800;
+  text-align: center;
+}
+
+.threshold-note {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
 .animation-toggle {
   display: flex;
   align-items: center;
@@ -730,41 +765,6 @@ body[data-annotation-mode="dot"] .image-queue-section {
   display: grid;
   grid-template-columns: repeat(5, minmax(92px, 1fr));
   gap: 7px;
-}
-
-.scatter-review-controls {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto auto;
-  align-items: center;
-  gap: 8px;
-}
-
-.scatter-review-controls > span {
-  color: #c3d0cc;
-  font-size: 12px;
-  font-weight: 650;
-}
-
-.scatter-review-controls .button {
-  min-height: 46px;
-  border-color: #53635e;
-  color: #edf3f1;
-  background: #303d39;
-}
-
-.scatter-review-controls .button:hover:not(:disabled) {
-  border-color: #94aaa3;
-  background: #394944;
-}
-
-.scatter-review-controls .scatter-keep-button {
-  border-color: #dd7659;
-  background: #a94f38;
-}
-
-.scatter-review-controls .scatter-keep-button:hover:not(:disabled) {
-  border-color: #ffab91;
-  background: #bd5b41;
 }
 
 .dot-class-button {
@@ -1267,6 +1267,12 @@ body[data-annotation-mode="dot"] #annotationCanvas {
   line-height: 1.4;
 }
 
+.rescatter-button {
+  width: 100%;
+  padding-block: 7px;
+  font-size: 11px;
+}
+
 .review-button {
   width: 100%;
 }
@@ -1584,14 +1590,6 @@ body[data-annotation-mode="dot"] #annotationCanvas {
     padding-bottom: 2px;
   }
 
-  .scatter-review-controls {
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .scatter-review-controls > span {
-    grid-column: 1 / -1;
-  }
-
   .canvas-toolbar {
     min-width: 0;
     overflow-x: auto;
@@ -1635,14 +1633,6 @@ body[data-annotation-mode="dot"] #annotationCanvas {
 
   .hotkey-grid {
     grid-template-columns: 1fr 1fr;
-  }
-
-  .scatter-review-controls {
-    grid-template-columns: 1fr;
-  }
-
-  .scatter-review-controls > span {
-    grid-column: auto;
   }
 
   .canvas-toolbar .toolbar-button kbd {
